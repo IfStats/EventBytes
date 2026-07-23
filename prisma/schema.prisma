@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  isVerified   Boolean @default(false)
+  isActive     Boolean @default(true)
+
+  memberships   Membership[]
+  sessions      Session[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Organization {
+  id String @id @default(cuid())
+
+  name String
+  slug String @unique
+
+  members Membership[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Event     Event[]
+}
+
+model Membership {
+  id String @id @default(cuid())
+
+  userId         String
+  organizationId String
+
+  role String @default("MEMBER")
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, organizationId])
+}
+
+model Session {
+  id String @id @default(cuid())
+
+  userId       String
+  refreshToken String
+
+  user User @relation(fields: [userId], references: [id])
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model RefreshToken {
+  id String @id @default(cuid())
+
+  token  String @unique
+  userId String
+
+  user User @relation(fields: [userId], references: [id])
+
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+
+  userId   String?
+  action   String
+  metadata Json?
+
+  user User? @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Event {
+  id             String @id @default(cuid())
+  organizationId String
+
+  name        String
+  description String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

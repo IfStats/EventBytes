@@ -7,9 +7,16 @@
     "build": "turbo build",
     "lint": "turbo lint"
   },
+  "prisma": {
+    "seed": "pnpm --dir apps/api exec ts-node prisma/seed.ts"
+  },
   "devDependencies": {
+    "prisma": "6.16.2",
     "turbo": "^2.5.5",
     "typescript": "^5.9.0"
   },
-  "packageManager": "pnpm@11.16.0"
+  "packageManager": "pnpm@11.16.0",
+  "dependencies": {
+    "@prisma/client": "6.16.2"
+  }
 }
