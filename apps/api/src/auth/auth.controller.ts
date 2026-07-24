@@ -3,10 +3,10 @@ import {
 	Controller,
 	Get,
 	Post,
+	Req,
 	UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { CurrentUser } from './decorators/current-user.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -30,9 +30,9 @@ export class AuthController {
 		return this.authService.refresh(refreshToken);
 	}
 
-	@Get('me')
 	@UseGuards(JwtAuthGuard)
-	me(@CurrentUser() user: any) {
-		return user;
+	@Get('me')
+	getMe(@Req() req: any) {
+		return req.user;
 	}
 }

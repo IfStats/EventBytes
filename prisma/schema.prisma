@@ -8,99 +8,235 @@ datasource db {
 }
 
 model User {
-  id           String  @id @default(cuid())
-  email        String  @unique
-  passwordHash String
-  firstName    String?
-  lastName     String?
-  isVerified   Boolean @default(false)
-  isActive     Boolean @default(true)
-
-  memberships   Membership[]
-  sessions      Session[]
-  refreshTokens RefreshToken[]
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  firstName     String?
+  lastName      String?
+  isVerified    Boolean        @default(false)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   auditLogs     AuditLog[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  memberships   Membership[]
+  refreshTokens RefreshToken[]
+  sessions      Session[]
+  registrations Registration[]
 }
 
 model Organization {
-  id String @id @default(cuid())
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
 
-  name String
-  slug String @unique
+  logo        String?
+  website     String?
+  description String?
 
-  members Membership[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  Event     Event[]
+  events      Event[]
+  members     Membership[]
 }
 
 model Membership {
-  id String @id @default(cuid())
-
+  id             String           @id @default(cuid())
   userId         String
   organizationId String
-
-  role String @default("MEMBER")
-
-  user         User         @relation(fields: [userId], references: [id])
-  organization Organization @relation(fields: [organizationId], references: [id])
-
-  createdAt DateTime @default(now())
+  role           OrganizationRole @default(MEMBER)
+  createdAt      DateTime         @default(now())
+  user           User             @relation(fields: [userId], references: [id])
+  organization   Organization     @relation(fields: [organizationId], references: [id])
 
   @@unique([userId, organizationId])
 }
 
 model Session {
-  id String @id @default(cuid())
-
+  id           String   @id @default(cuid())
   userId       String
   refreshToken String
-
-  user User @relation(fields: [userId], references: [id])
-
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
 }
 
 model RefreshToken {
-  id String @id @default(cuid())
-
-  token  String @unique
-  userId String
-
-  user User @relation(fields: [userId], references: [id])
-
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
   expiresAt DateTime
   revokedAt DateTime?
-
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
 }
 
 model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+model Event {
+  id             String   @id @default(cuid())
+  organizationId String
+
+  name           String
+  slug           String   @unique
+
+  description    String?
+  venue          String?
+
+  bannerImage    String?
+  timezone       String   @default("Africa/Accra")
+  capacity       Int?
+
+  startDate      DateTime
+  endDate        DateTime
+
+  status         EventStatus @default(DRAFT)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  ticketCategories TicketCategory[]
+  registrations  Registration[]
+}
+
+model TicketCategory {
   id String @id @default(cuid())
 
-  userId   String?
-  action   String
-  metadata Json?
+  eventId  String
+  name     String
+  price    Float
+  quantity Int
+  sold     Int    @default(0)
 
-  user User? @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  registrations Registration[]
+}
+
+enum RegistrationStatus {
+  PENDING_PAYMENT
+
+  CONFIRMED
+
+  CHECKED_IN
+
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+enum PaymentProvider {
+  PAYSTACK
+  FLUTTERWAVE
+  STRIPE
+}
+
+enum TicketStatus {
+  VALID
+  USED
+  CANCELLED
+}
+
+model Registration {
+  id String @id @default(cuid())
+
+  userId       String
+  eventId      String
+  ticketCategoryId String
+
+  checkedIn    Boolean   @default(false)
+  checkedInAt  DateTime?
+  checkedInBy  String?
+
+  status RegistrationStatus @default(CONFIRMED)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  ticketCategory TicketCategory @relation(fields: [ticketCategoryId], references: [id])
+
+  ticket Ticket?
+
+  payments Payment[]
+
+  @@index([eventId])
+  @@index([userId])
+}
+
+model Ticket {
+  id String @id @default(cuid())
+
+  registrationId String       @unique
+  registration   Registration @relation(fields: [registrationId], references: [id])
+
+  ticketNumber String @unique
+  qrToken      String @unique
+
+  status TicketStatus @default(VALID)
+
+  issuedAt    DateTime  @default(now())
+  checkedInAt DateTime?
 
   createdAt DateTime @default(now())
 }
 
-model Event {
-  id             String @id @default(cuid())
-  organizationId String
+model Payment {
+  id String @id @default(cuid())
 
-  name        String
-  description String?
+  registrationId String
+  amount Float
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  currency String @default("GHS")
+
+  status PaymentStatus @default(PENDING)
+
+  reference String @unique
+
+  provider PaymentProvider
+
+  providerReference String?
+  paidAt            DateTime?
+  metadata          Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  registration Registration @relation(fields: [registrationId], references: [id])
+
+  @@index([registrationId])
+  @@index([status])
 }
