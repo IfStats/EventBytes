@@ -10,22 +10,26 @@ constructor(
 ){}
 
 create(
- organizationId:string,
- dto:CreateEventDto
-){
+  organizationId: string,
+  dto: CreateEventDto,
+) {
 
-return this.prisma.event.create({
+  const slug = dto.name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-');
 
-data:{
- organizationId,
- name:dto.name,
- description:dto.description,
- venue:dto.venue,
- startDate:new Date(dto.startDate),
- endDate:new Date(dto.endDate)
-}
-
-});
+  return this.prisma.event.create({
+    data: {
+      organizationId,
+      name: dto.name,
+      slug,
+      description: dto.description,
+      venue: dto.venue,
+      startDate: new Date(dto.startDate),
+      endDate: new Date(dto.endDate),
+    },
+  });
 
 }
 
