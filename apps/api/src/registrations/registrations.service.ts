@@ -6,45 +6,67 @@ import { CreateRegistrationDto } from './dto/create-registration.dto';
 export class RegistrationsService {
 
   constructor(
-    private prisma: PrismaService
-  ) {}
+  private prisma: PrismaService,
+) {}
 
   async create(
-    userId: string,
-    dto: CreateRegistrationDto
-  ) {
-    const ticketCategoryId = dto.ticketTypeId;
+  userId: string,
+  dto: CreateRegistrationDto
+) {
 
-    const ticketCategory = await this.prisma.ticketCategory.findUnique({
+  const ticketCategoryId = dto.ticketTypeId;
+
+  const registration = await this.prisma.$transaction(async (tx) => {
+
+    const ticketCategory = await tx.ticketCategory.findUnique({
       where: {
-        id: ticketCategoryId,
-      },
+        id: ticketCategoryId
+      }
     });
 
     if (!ticketCategory) {
-      throw new BadRequestException('Ticket category not found');
+      throw new BadRequestException(
+        'Ticket category not found'
+      );
     }
 
     if (ticketCategory.sold >= ticketCategory.quantity) {
-      throw new BadRequestException('Tickets sold out');
+      throw new BadRequestException(
+        'Tickets sold out'
+      );
     }
 
-    const registration = await this.prisma.registration.create({
+    const registration = await tx.registration.create({
       data: {
         userId,
         eventId: dto.eventId,
         ticketCategoryId,
-        status: 'CONFIRMED',
+        status: 'PENDING_PAYMENT'
+      }
+    });
+
+    await tx.ticketCategory.update({
+      where: {
+        id: ticketCategoryId
       },
-      include: {
-        event: true,
-        ticketCategory: true,
-        user: true,
-      },
+      data: {
+        sold: {
+          increment: 1
+        }
+      }
     });
 
     return registration;
-  }
+
+  });
+
+
+  return {
+    registration
+  };
+
+}
+
 
   async findUserRegistrations(userId:string){
 
