@@ -82,46 +82,104 @@ export class TicketsService {
 		};
 	}
 
-	async checkIn(ticketNumber: string) {
-		const ticket = await this.prisma.ticket.findUnique({
-			where: {
-				ticketNumber,
-			},
-			include: {
-				registration: {
-					include: {
-						user: true,
-						event: true,
-						ticketCategory: true,
-					},
-				},
-			},
-		});
+	  async checkIn(
+    ticketNumber: string,
+    checkedInBy?: string,
+  ) {
 
-		if (!ticket) {
-			throw new NotFoundException('Ticket not found');
-		}
+    const ticket =
+      await this.prisma.ticket.findUnique({
+        where: {
+          ticketNumber,
+        },
+        include: {
+          registration: {
+            include: {
+              user: true,
+              event: true,
+              ticketCategory: true,
+            },
+          },
+        },
+      });
 
-		if (ticket.status === 'USED') {
-			throw new BadRequestException('Ticket already used');
-		}
 
-		const updated = await this.prisma.ticket.update({
-			where: {
-				id: ticket.id,
-			},
-			data: {
-				status: 'USED',
-				checkedInAt: new Date(),
-			},
-		});
+    if (!ticket) {
+      throw new NotFoundException(
+        'Ticket not found'
+      );
+    }
 
-		return {
-			message: 'Check-in successful',
-			attendee: ticket.registration.user.email,
-			event: ticket.registration.event.name,
-			ticketCategory: ticket.registration.ticketCategory.name,
-			checkedInAt: updated.checkedInAt,
-		};
-	}
-}
+
+    if (ticket.status === 'USED') {
+      throw new BadRequestException(
+        'Ticket already used'
+      );
+    }
+
+
+    const checkedInAt = new Date();
+
+
+    const result =
+      await this.prisma.$transaction(async (tx) => {
+
+        const updatedTicket =
+          await tx.ticket.update({
+            where: {
+              id: ticket.id,
+            },
+
+            data: {
+              status: 'USED',
+              checkedInAt,
+            },
+          });
+
+
+        await tx.registration.update({
+          where: {
+            id: ticket.registrationId,
+          },
+
+          data: {
+            checkedIn: true,
+            checkedInAt,
+            checkedInBy,
+            status: 'CHECKED_IN',
+          },
+        });
+
+
+        return updatedTicket;
+
+      });
+
+
+    return {
+      message: 'Check-in successful',
+
+      attendee:
+        `${ticket.registration.user.firstName ?? ''} ${ticket.registration.user.lastName ?? ''}`
+        .trim(),
+
+      email:
+        ticket.registration.user.email,
+
+      event:
+        ticket.registration.event.name,
+
+      ticketCategory:
+        ticket.registration.ticketCategory.name,
+
+      ticketNumber:
+        result.ticketNumber,
+
+      checkedInAt:
+        result.checkedInAt,
+    };
+
+  } // closes checkIn method
+
+
+} // closes TicketsService class

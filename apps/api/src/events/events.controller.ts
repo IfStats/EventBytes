@@ -4,7 +4,8 @@ import {
   Get,
   Body,
   Param,
-  UseGuards
+  UseGuards,
+  Patch
 } from '@nestjs/common';
 
 import { AuthGuard } from '@nestjs/passport';
@@ -20,7 +21,34 @@ export class EventsController {
 
   constructor(
     private service: EventsService
-  ){}
+  ) {}
+
+
+  // -------------------------
+  // PUBLIC ROUTES
+  // -------------------------
+
+  @Get()
+  findPublishedEvents() {
+
+    return this.service.findPublishedEvents();
+
+  }
+
+
+  @Get('public/:slug')
+  findEventBySlug(
+    @Param('slug') slug:string,
+  ) {
+
+    return this.service.findEventBySlug(slug);
+
+  }
+
+
+  // -------------------------
+  // ORGANIZER ROUTES
+  // -------------------------
 
 
   @Post(':organizationId')
@@ -31,8 +59,8 @@ export class EventsController {
   @Roles('OWNER','ADMIN')
   create(
     @Param('organizationId') organizationId:string,
-    @Body() dto:CreateEventDto
-  ){
+    @Body() dto:CreateEventDto,
+  ) {
 
     return this.service.create(
       organizationId,
@@ -42,21 +70,53 @@ export class EventsController {
   }
 
 
-  // IMPORTANT: keep this ABOVE :organizationId
-  @Get(':eventId/attendees')
-  getAttendees(
-    @Param('eventId') eventId:string,
-  ){
 
-    return this.service.getAttendees(eventId);
+  @Patch(':organizationId/:eventId/publish')
+  @UseGuards(
+    AuthGuard('jwt'),
+    OrganizationGuard
+  )
+  @Roles('OWNER','ADMIN')
+  togglePublish(
+    @Param('organizationId') organizationId:string,
+    @Param('eventId') eventId:string,
+  ) {
+
+    return this.service.togglePublish(
+      organizationId,
+      eventId
+    );
 
   }
 
 
+  @Get(':eventId/attendees')
+  @UseGuards(
+    AuthGuard('jwt'),
+    OrganizationGuard
+  )
+  @Roles('OWNER','ADMIN')
+  getAttendees(
+    @Param('eventId') eventId:string,
+  ) {
+
+    return this.service.getAttendees(
+      eventId
+    );
+
+  }
+
+
+
   @Get(':organizationId')
+  @UseGuards(
+    AuthGuard('jwt'),
+    OrganizationGuard
+  )
+  @Roles('OWNER','ADMIN')
   findAll(
-    @Param('organizationId') organizationId:string
-  ){
+    @Param('organizationId') organizationId:string,
+  ) {
 
     return this.service.findAll(
       organizationId

@@ -99,6 +99,8 @@ model Event {
   id             String   @id @default(cuid())
   organizationId String
 
+  published Boolean @default(false)
+
   name           String
   slug           String   @unique
 
@@ -117,10 +119,10 @@ model Event {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
 
   ticketCategories TicketCategory[]
-  registrations  Registration[]
+  registrations Registration[]
 }
 
 model TicketCategory {
@@ -198,17 +200,20 @@ model Registration {
 }
 
 model Ticket {
+
   id String @id @default(cuid())
 
-  registrationId String       @unique
-  registration   Registration @relation(fields: [registrationId], references: [id])
+  registrationId String @unique
+  registration Registration @relation(fields: [registrationId], references: [id])
 
   ticketNumber String @unique
-  qrToken      String @unique
+  qrToken String @unique
 
   status TicketStatus @default(VALID)
 
-  issuedAt    DateTime  @default(now())
+  issuedAt DateTime @default(now())
+
+  checkedInAt DateTime?
 
   createdAt DateTime @default(now())
 }
