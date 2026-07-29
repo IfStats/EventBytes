@@ -209,7 +209,6 @@ model Ticket {
   status TicketStatus @default(VALID)
 
   issuedAt    DateTime  @default(now())
-  checkedInAt DateTime?
 
   createdAt DateTime @default(now())
 }

@@ -8,9 +8,20 @@ export class DashboardController {
 	) {}
 
 	@Get(':organizationId')
-	dashboard(
-		@Param('organizationId') organizationId: string,
-	) {
-		return this.dashboardService.getDashboard(organizationId);
-	}
+getDashboard(
+  @Param('organizationId') organizationId: string,
+) {
+  return this.dashboardService.getDashboard(
+    organizationId,
+  );
+}
+
+@Get(':organizationId/recent-registrations')
+getRecentRegistrations(
+  @Param('organizationId') organizationId: string,
+) {
+  return this.dashboardService.getRecentRegistrations(
+    organizationId,
+  );
+}
 }
