@@ -1,11 +1,12 @@
 import {
-	Body,
-	Controller,
-	Get,
-	Param,
-	Post,
-	Req,
-	UseGuards,
+        Body,
+        Controller,
+        Get,
+        Param,
+        Post,
+        Req,
+        Headers,
+        UseGuards,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -33,4 +34,17 @@ export class PaymentsController {
 	) {
 		return this.paymentsService.verify(reference);
 	}
+
+	@Post('webhook')
+webhook(
+        @Body() payload:any,
+        @Headers('x-paystack-signature') signature:string,
+) {
+
+        return this.paymentsService.webhook(
+                payload,
+                signature,
+        );
+
+}
 }

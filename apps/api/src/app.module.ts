@@ -10,7 +10,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { MailModule } from './mail/mail.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { TicketCategoriesModule } from './ticket-categories/ticket-categories.module';
-
+import { RegistrationLinksModule } from './registration-links/registration-links.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -26,6 +26,7 @@ import { TicketCategoriesModule } from './ticket-categories/ticket-categories.mo
     MailModule,
     DashboardModule,
     TicketCategoriesModule,
+    RegistrationLinksModule,
   ],
 })
 export class AppModule {}

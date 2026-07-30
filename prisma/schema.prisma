@@ -25,19 +25,24 @@ model User {
 }
 
 model Organization {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+
+  countryCode String  @default("NG")
+  country     Country @relation(fields: [countryCode], references: [code])
 
   logo        String?
   website     String?
   description String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  events      Event[]
-  members     Membership[]
+  events  Event[]
+  members Membership[]
+
+  @@index([countryCode])
 }
 
 model Membership {
@@ -96,33 +101,68 @@ enum EventStatus {
 }
 
 model Event {
-  id             String   @id @default(cuid())
+  id             String @id @default(cuid())
   organizationId String
 
   published Boolean @default(false)
 
-  name           String
-  slug           String   @unique
+  name String
+  slug String @unique
 
-  description    String?
-  venue          String?
+  description String?
+  venue       String?
 
-  bannerImage    String?
-  timezone       String   @default("Africa/Accra")
-  capacity       Int?
+  bannerImage String?
+  timezone    String  @default("Africa/Accra")
+  capacity    Int?
 
-  startDate      DateTime
-  endDate        DateTime
+  startDate DateTime
+  endDate   DateTime
 
-  status         EventStatus @default(DRAFT)
+  status EventStatus @default(DRAFT)
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
 
-  ticketCategories TicketCategory[]
-  registrations Registration[]
+  ticketCategories  TicketCategory[]
+  registrations     Registration[]
+  registrationLinks RegistrationLink[]
+}
+
+model RegistrationLink {
+  id String @id @default(cuid())
+
+  eventId String
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  slug String @unique
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}
+
+model Country {
+  code String @id
+
+  name String
+
+  currency String
+  symbol   String
+
+  locale   String
+  timezone String
+
+  phoneCode String?
+
+  paymentProvider PaymentProvider?
+
+  organizations Organization[]
 }
 
 model TicketCategory {
@@ -173,13 +213,13 @@ enum TicketStatus {
 model Registration {
   id String @id @default(cuid())
 
-  userId       String
-  eventId      String
+  userId           String
+  eventId          String
   ticketCategoryId String
 
-  checkedIn    Boolean   @default(false)
-  checkedInAt  DateTime?
-  checkedInBy  String?
+  checkedIn   Boolean   @default(false)
+  checkedInAt DateTime?
+  checkedInBy String?
 
   status RegistrationStatus @default(CONFIRMED)
 
@@ -200,14 +240,13 @@ model Registration {
 }
 
 model Ticket {
-
   id String @id @default(cuid())
 
-  registrationId String @unique
-  registration Registration @relation(fields: [registrationId], references: [id])
+  registrationId String       @unique
+  registration   Registration @relation(fields: [registrationId], references: [id])
 
   ticketNumber String @unique
-  qrToken String @unique
+  qrToken      String @unique
 
   status TicketStatus @default(VALID)
 
@@ -222,15 +261,15 @@ model Payment {
   id String @id @default(cuid())
 
   registrationId String
-  amount Float
+  amount         Float
 
-  currency String @default("GHS")
+  currency String
 
   status PaymentStatus @default(PENDING)
 
   reference String @unique
 
-  provider PaymentProvider
+  provider PaymentProvider @default(PAYSTACK)
 
   providerReference String?
   paidAt            DateTime?

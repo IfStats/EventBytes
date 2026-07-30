@@ -51,4 +51,39 @@ export class DashboardController {
     );
   }
 
+  @Get(':organizationId/revenue')
+getRevenue(
+  @Param('organizationId') organizationId: string,
+) {
+  return this.dashboardService.getRevenueAnalytics(
+    organizationId,
+  );
+}
+
+@Get(':organizationId/event-performance')
+getEventPerformance(
+  @Param('organizationId') organizationId: string,
+) {
+  return this.dashboardService.getEventPerformance(
+    organizationId,
+  );
+}
+
+@Get(':organizationId/ticket-sales')
+getTicketSales(
+  @Param('organizationId') organizationId: string,
+) {
+  return this.dashboardService.getTicketSales(
+    organizationId,
+  );
+}
+
+@Get(':organizationId/payments')
+getPaymentAnalytics(
+  @Param('organizationId') organizationId: string,
+) {
+  return this.dashboardService.getPaymentAnalytics(
+    organizationId,
+  );
+}
 }

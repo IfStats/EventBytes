@@ -1,10 +1,11 @@
 import {
- Controller,
- Post,
- Body,
- Req,
- Get,
- UseGuards
+  Controller,
+  Get,
+  Post,
+  Body,
+  Req,
+  UseGuards,
+  Param,
 } from '@nestjs/common';
 
 import { RegistrationsService } 
@@ -43,4 +44,12 @@ async findMine(
   return this.registrationsService.findUserRegistrations(req.user.id);
 }
 
+@Get(':id')
+findOne(
+  @Param('id') id:string,
+){
+
+ return this.registrationsService.findOne(id);
+
+}
 }

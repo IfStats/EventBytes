@@ -26,16 +26,28 @@ export class PaymentsService {
 		registrationId: string,
 	) {
 		const registration =
-			await this.prisma.registration.findUnique({
-				where: {
-					id: registrationId,
-				},
-				include: {
-					user: true,
-					ticketCategory: true,
-					payments: true,
-				},
-			});
+  await this.prisma.registration.findUnique({
+    where: {
+      id: registrationId,
+    },
+    include: {
+      user: true,
+
+      ticketCategory: true,
+
+      payments: true,
+
+      event: {
+        include: {
+          organization: {
+            include: {
+              country: true,
+            },
+          },
+        },
+      },
+    },
+  });
 
 		if (!registration) {
 			throw new NotFoundException(
@@ -50,6 +62,20 @@ export class PaymentsService {
 		const paid = registration.payments.find(
 			(payment) => payment.status === PaymentStatus.PAID,
 		);
+
+		const country =
+  registration.event.organization.country;
+
+const currency =
+  country.currency;
+
+const provider = country.paymentProvider;
+
+if (!provider) {
+  throw new BadRequestException(
+    'Payment provider not configured for organizer country',
+  );
+}
 
 		if (paid) {
 			throw new BadRequestException(
@@ -83,8 +109,9 @@ export class PaymentsService {
 			data: {
 				registrationId,
 				amount: registration.ticketCategory.price,
+				currency,
 				reference,
-				provider: 'PAYSTACK',
+				provider,
 				status: PaymentStatus.PENDING,
 			},
 		});
@@ -174,4 +201,50 @@ export class PaymentsService {
 			ticket,
 		};
 	}
+
+	async webhook(
+        payload:any,
+        signature:string,
+) {
+
+const crypto = require('crypto');
+
+
+const hash =
+crypto
+.createHmac(
+        'sha512',
+        this.configService.get('PAYSTACK_SECRET_KEY')
+)
+.update(JSON.stringify(payload))
+.digest('hex');
+
+
+if(hash !== signature){
+
+throw new BadRequestException(
+        'Invalid webhook signature',
+);
+
+}
+
+
+
+if(payload.event !== 'charge.success'){
+
+return {
+        message:'Event ignored',
+};
+
+}
+
+
+
+const reference =
+payload.data.reference;
+
+
+return this.verify(reference);
+
+}
 }
