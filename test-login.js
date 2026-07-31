@@ -1,8 +1,8 @@
 const http = require('http');
 
 const payload = JSON.stringify({
-  email: 'test@example.com',
-  password: 'Test123!@#'
+  email: 'admin@eventbytes.com',
+  password: 'Password123!'
 });
 
 const req = http.request({
