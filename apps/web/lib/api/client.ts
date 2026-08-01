@@ -7,22 +7,27 @@ export const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  withCredentials: true,
 });
+
 
 api.interceptors.request.use(
   (config) => {
+
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("accessToken");
+
+      const token =
+        localStorage.getItem("accessToken");
 
       if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers.Authorization =
+          `Bearer ${token}`;
       }
+
     }
 
     return config;
   },
-  (error) => Promise.reject(error)
-);
 
-export default api;
+  (error) =>
+    Promise.reject(error)
+);

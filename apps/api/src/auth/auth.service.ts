@@ -186,4 +186,40 @@ export class AuthService {
       && refreshToken.expiresAt > new Date(),
     );
   }
+
+  async getMe(userId: string) {
+
+  console.log("GET ME USER ID:", userId);
+
+  const user = await this.prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      memberships: {
+        include: {
+          organization: true,
+        },
+      },
+    },
+  });
+
+
+  if (!user) {
+    throw new UnauthorizedException(
+      "User not found",
+    );
+  }
+
+
+  const {
+    passwordHash,
+    ...safeUser
+  } = user;
+
+
+  return safeUser;
+
+}
+
 }

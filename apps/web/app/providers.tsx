@@ -9,6 +9,10 @@ import {
   useState,
 } from "react";
 
+import {
+  AuthProvider,
+} from "@/context/auth-context";
+
 
 export function QueryProvider({
   children,
@@ -32,7 +36,9 @@ export function QueryProvider({
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <AuthProvider>
+        {children}
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

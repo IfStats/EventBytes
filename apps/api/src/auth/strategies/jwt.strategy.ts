@@ -8,6 +8,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private readonly configService: ConfigService,
   ) {
+
+     console.log(
+  "JWT_SECRET:",
+  configService.get("JWT_SECRET"),
+);
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
 
@@ -17,6 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         configService.getOrThrow<string>('JWT_SECRET'),
     });
   }
+
 
   async validate(payload: any) {
     return {
