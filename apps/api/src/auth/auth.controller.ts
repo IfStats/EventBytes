@@ -34,7 +34,8 @@ export class AuthController {
 @Get("me")
 async getMe(@Req() req: any) {
 
-  console.log("REQ USER:", req.user);
+  console.log("AUTH CONTROLLER HIT");
+  console.log(req.user);
 
   return this.authService.getMe(req.user.id);
 }

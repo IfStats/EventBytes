@@ -8,5 +8,20 @@ export type LoginDto = {
 export async function login(data: LoginDto) {
   const response = await api.post("/auth/login", data);
 
+  const {
+    accessToken,
+    refreshToken,
+  } = response.data;
+
+  localStorage.setItem(
+    "accessToken",
+    accessToken,
+  );
+
+  localStorage.setItem(
+    "refreshToken",
+    refreshToken,
+  );
+
   return response.data;
 }
