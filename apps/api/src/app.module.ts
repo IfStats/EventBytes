@@ -11,6 +11,8 @@ import { MailModule } from './mail/mail.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { TicketCategoriesModule } from './ticket-categories/ticket-categories.module';
 import { RegistrationLinksModule } from './registration-links/registration-links.module';
+
+
 @Module({
   imports: [
     ConfigModule.forRoot({

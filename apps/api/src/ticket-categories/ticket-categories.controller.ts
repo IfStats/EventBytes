@@ -1,38 +1,109 @@
 import {
-  Body,
   Controller,
-  Get,
-  Param,
   Post,
+  Get,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
 } from '@nestjs/common';
-import { TicketCategoriesService } from './ticket-categories.service';
-import { CreateTicketCategoryDto } from './dto/create-ticket-category.dto';
 
-@Controller()
+import { AuthGuard } from '@nestjs/passport';
+
+import { TicketCategoriesService }
+from './ticket-categories.service';
+
+import { CreateTicketCategoryDto }
+from './dto/create-ticket-category.dto';
+
+import { OrganizationGuard }
+from '../common/guards/organization.guard';
+
+import { Roles }
+from '../common/decorators/roles.decorator';
+
+
+@Controller('ticket-categories')
 export class TicketCategoriesController {
-  constructor(
-    private readonly ticketCategoriesService: TicketCategoriesService,
-  ) {}
 
-  @Post('events/:eventId/ticket-categories')
-  create(
-    @Param('eventId') eventId: string,
-    @Body() dto: CreateTicketCategoryDto,
-  ) {
-    return this.ticketCategoriesService.create(eventId, dto);
-  }
 
-  @Get('events/:eventId/ticket-categories')
-  findAll(
-    @Param('eventId') eventId: string,
-  ) {
-    return this.ticketCategoriesService.findAll(eventId);
-  }
+constructor(
+  private service: TicketCategoriesService,
+){}
 
-  @Get('ticket-categories/:id')
-  findOne(
-    @Param('id') id: string,
-  ) {
-    return this.ticketCategoriesService.findOne(id);
-  }
+
+
+// CREATE TICKET CATEGORY
+
+@Post(':organizationId/:eventId')
+@UseGuards(
+  AuthGuard('jwt'),
+  OrganizationGuard
+)
+@Roles(
+  'OWNER',
+  'ADMIN'
+)
+create(
+
+  @Param('organizationId')
+  organizationId:string,
+
+  @Param('eventId')
+  eventId:string,
+
+  @Body()
+  dto:CreateTicketCategoryDto,
+
+){
+
+  return this.service.create(
+    eventId,
+    dto
+  );
+
+}
+
+
+
+
+// GET EVENT TICKETS
+
+@Get('event/:eventId')
+findByEvent(
+
+  @Param('eventId')
+  eventId:string,
+
+){
+
+  return this.service.findByEvent(
+    eventId
+  );
+
+}
+
+
+
+
+// DELETE CATEGORY
+
+@Delete(':id')
+@UseGuards(
+  AuthGuard('jwt')
+)
+delete(
+
+  @Param('id')
+  id:string,
+
+){
+
+  return this.service.delete(
+    id
+  );
+
+}
+
+
 }
