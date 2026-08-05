@@ -26,6 +26,8 @@ export default function LoginPage() {
         password,
       });
 
+      console.log("LOGIN RESPONSE:", result);
+
       localStorage.setItem(
         "accessToken",
         result.accessToken,

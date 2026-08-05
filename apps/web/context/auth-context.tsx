@@ -47,15 +47,16 @@ export function AuthProvider({
 });
 
 
-console.log("AUTH PROVIDER STATE", {
-  user,
-  isLoading,
-  error,
-});
+console.log(
+  "AUTH USER RESPONSE",
+  JSON.stringify(user, null, 2)
+);
 
 
-  const organizationId =
-    user?.memberships?.[0]?.organizationId ?? null;
+ const organizationId =
+  user?.memberships?.[0]?.organization?.id ??
+  user?.memberships?.[0]?.organizationId ??
+  null;
 
 
   return (
