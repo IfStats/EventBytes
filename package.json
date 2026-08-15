@@ -19,6 +19,12 @@
     "typescript": "^5.9.0"
   },
   "packageManager": "pnpm@11.18.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
+  },
   "dependencies": {
     "@prisma/client": "6.16.2",
     "axios": "^1.18.1",
