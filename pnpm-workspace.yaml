@@ -11,3 +11,13 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
   workerd: true
+
+onlyBuiltDependencies:
+  - esbuild
+  - workerd
+  - '@prisma/client'
+  - '@prisma/engines'
+  - argon2
+  - prisma
+  - sharp
+  - unrs-resolver
