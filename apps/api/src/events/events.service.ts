@@ -4,21 +4,25 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
+
 import { CreateEventDto } from './dto/create-event.dto';
 
 
 @Injectable()
 export class EventsService {
 
+
   constructor(
     private prisma: PrismaService,
   ) {}
+
 
 
   async create(
     organizationId: string,
     dto: CreateEventDto,
   ) {
+
 
     const slug = dto.name
       .toLowerCase()
@@ -52,10 +56,81 @@ export class EventsService {
 
 
 
+
+  // ORGANIZER EVENT DETAIL
+
+  async findOne(
+    organizationId: string,
+    eventId: string,
+  ) {
+
+
+    const event =
+      await this.prisma.event.findFirst({
+
+        where: {
+
+          id: eventId,
+
+          organizationId,
+
+        },
+
+
+        include: {
+
+          organization: {
+
+            select: {
+
+              id: true,
+
+              name: true,
+
+            },
+
+          },
+
+
+          ticketCategories: {
+
+            orderBy: {
+
+              price: 'asc',
+
+            },
+
+          },
+
+        },
+
+      });
+
+
+
+    if (!event) {
+
+      throw new NotFoundException(
+        'Event not found',
+      );
+
+    }
+
+
+
+    return event;
+
+  }
+
+
+
+
+
   async togglePublish(
     organizationId: string,
     eventId: string,
   ) {
+
 
     const event =
       await this.prisma.event.findFirst({
@@ -69,6 +144,7 @@ export class EventsService {
         },
 
       });
+
 
 
     if (!event) {
@@ -89,9 +165,11 @@ export class EventsService {
 
       },
 
+
       data: {
 
         published: !event.published,
+
 
         status: !event.published
           ? 'PUBLISHED'
@@ -106,9 +184,11 @@ export class EventsService {
 
 
 
+
   async getAttendees(
     eventId: string,
   ) {
+
 
     const registrations =
       await this.prisma.registration.findMany({
@@ -141,42 +221,44 @@ export class EventsService {
 
 
 
-    return registrations.map((registration) => ({
+    return registrations.map(
+
+      (registration) => ({
+
+        id: registration.id,
 
 
-      id: registration.id,
+        attendee:
+          `${registration.user.firstName ?? ''} ${registration.user.lastName ?? ''}`
+          .trim(),
 
 
-      attendee:
-        `${registration.user.firstName ?? ''} ${registration.user.lastName ?? ''}`
-        .trim(),
+        email:
+          registration.user.email,
 
 
-      email:
-        registration.user.email,
+        ticketType:
+          registration.ticketCategory.name,
 
 
-      ticketType:
-        registration.ticketCategory.name,
+        registrationStatus:
+          registration.status,
 
 
-      registrationStatus:
-        registration.status,
+        checkedIn:
+          registration.checkedIn,
 
 
-      checkedIn:
-        registration.checkedIn,
+        ticketNumber:
+          registration.ticket?.ticketNumber ?? null,
 
 
-      ticketNumber:
-        registration.ticket?.ticketNumber ?? null,
+        registeredAt:
+          registration.createdAt,
 
+      })
 
-      registeredAt:
-        registration.createdAt,
-
-
-    }));
+    );
 
   }
 
@@ -201,6 +283,13 @@ export class EventsService {
       include: {
 
         ticketCategories: true,
+
+      },
+
+
+      orderBy: {
+
+        createdAt: 'desc',
 
       },
 
@@ -249,15 +338,11 @@ export class EventsService {
 
         ticketCategories: true,
 
-
       },
-
 
     });
 
-
   }
-
 
 
 
@@ -311,6 +396,8 @@ export class EventsService {
 
 
 
+
+
     if (!event) {
 
       throw new NotFoundException(
@@ -321,10 +408,11 @@ export class EventsService {
 
 
 
+
     return event;
 
-
   }
+
 
 
 }

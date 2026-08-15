@@ -52,3 +52,17 @@ export async function publishEvent(
  return response.data;
 
 }
+
+export async function getEvent(
+  organizationId:string,
+  eventId:string
+){
+
+  const response =
+    await api.get(
+      `/events/${organizationId}/${eventId}`
+    );
+
+  return response.data;
+
+}

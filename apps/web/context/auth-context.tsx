@@ -15,64 +15,94 @@ import {
 
 
 type AuthContextType = {
-  user: any;
-  organizationId: string | null;
-  isLoading: boolean;
+  user:any;
+  organizationId:string|null;
+  isLoading:boolean;
 };
 
 
 const AuthContext =
-  createContext<AuthContextType>({
-    user: null,
-    organizationId: null,
-    isLoading: true,
-  });
-
-
-export function AuthProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-
-  const {
-  data: user,
-  isLoading,
-  error,
-} = useQuery({
-  queryKey: ["me"],
-  queryFn: getMe,
-  staleTime: 1000 * 60 * 10,
-  refetchOnWindowFocus: false,
+createContext<AuthContextType>({
+  user:null,
+  organizationId:null,
+  isLoading:true,
 });
 
 
+export function AuthProvider({
+ children,
+}:{
+ children:React.ReactNode;
+}) {
+
+
+const {
+ data:user,
+ isLoading,
+ error,
+}=useQuery({
+
+ queryKey:["me"],
+
+ queryFn:getMe,
+
+ staleTime:1000 * 60 * 10,
+
+ refetchOnWindowFocus:false,
+
+});
+
+
+
 console.log(
-  "AUTH USER RESPONSE",
-  JSON.stringify(user, null, 2)
+ "AUTH USER RESPONSE",
+ user
 );
 
 
- const organizationId =
-  user?.memberships?.[0]?.organization?.id ??
-  user?.memberships?.[0]?.organizationId ??
-  null;
+console.log(
+ "AUTH ERROR",
+ error
+);
 
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        organizationId,
-        isLoading,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+
+const organizationId =
+user?.memberships?.[0]?.organization?.id ??
+user?.memberships?.[0]?.organizationId ??
+null;
+
+
+
+console.log(
+ "AUTH ORG ID",
+ organizationId
+);
+
+
+
+return (
+
+<AuthContext.Provider
+ value={{
+   user,
+   organizationId,
+   isLoading,
+ }}
+>
+
+{children}
+
+</AuthContext.Provider>
+
+);
+
 }
 
 
-export function useAuth() {
-  return useContext(AuthContext);
+
+export function useAuth(){
+
+return useContext(AuthContext);
+
 }

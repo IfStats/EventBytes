@@ -33,10 +33,6 @@ export class AuthController {
 	@UseGuards(JwtAuthGuard)
 @Get("me")
 async getMe(@Req() req: any) {
-
-  console.log("AUTH CONTROLLER HIT");
-  console.log(req.user);
-
   return this.authService.getMe(req.user.id);
 }
 

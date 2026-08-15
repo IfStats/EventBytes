@@ -7,6 +7,12 @@
     "build": "turbo build",
     "lint": "turbo lint"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
+  },
   "prisma": {
     "seed": "pnpm --dir apps/api exec ts-node prisma/seed.ts"
   },

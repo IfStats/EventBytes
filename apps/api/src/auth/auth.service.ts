@@ -2,6 +2,7 @@ import {
   ConflictException,
   Injectable,
   UnauthorizedException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'crypto';
@@ -152,9 +153,9 @@ export class AuthService {
   }
 
   private async generateTokens(
-    userId: string,
-    email: string,
-  ): Promise<AuthTokens> {
+  userId: string,
+  email: string,
+): Promise<AuthTokens> {
     const accessToken = await this.jwtService.signAsync({
       sub: userId,
       email,
@@ -187,39 +188,52 @@ export class AuthService {
     );
   }
 
-  async getMe(userId: string) {
+ async getMe(userId: string) {
 
-  console.log("GET ME USER ID:", userId);
+  const user =
+    await this.prisma.user.findUnique({
 
-  const user = await this.prisma.user.findUnique({
-    where: {
-      id: userId,
-    },
-    include: {
-      memberships: {
-        include: {
-          organization: true,
-        },
+      where: {
+        id: userId,
       },
-    },
-  });
+
+      select: {
+
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        isVerified: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+
+        memberships: {
+
+          include: {
+
+            organization: true,
+
+          },
+
+        },
+
+      },
+
+    });
 
 
   if (!user) {
-    throw new UnauthorizedException(
-      "User not found",
+
+    throw new NotFoundException(
+      "User not found"
     );
+
   }
 
 
-  const {
-    passwordHash,
-    ...safeUser
-  } = user;
+  return user;
 
-
-  return safeUser;
-
-}
+ }
 
 }

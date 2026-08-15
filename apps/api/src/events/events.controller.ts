@@ -5,28 +5,33 @@ import {
   Body,
   Param,
   UseGuards,
-  Patch
+  Patch,
 } from '@nestjs/common';
 
 import { AuthGuard } from '@nestjs/passport';
 
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
+
 import { OrganizationGuard } from '../common/guards/organization.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+
 
 
 @Controller('events')
 export class EventsController {
 
+
   constructor(
-    private service: EventsService
+    private service: EventsService,
   ) {}
+
 
 
   // -------------------------
   // PUBLIC ROUTES
   // -------------------------
+
 
   @Get()
   findPublishedEvents() {
@@ -36,14 +41,18 @@ export class EventsController {
   }
 
 
+
   @Get('public/:slug')
   findEventBySlug(
     @Param('slug') slug:string,
   ) {
 
-    return this.service.findEventBySlug(slug);
+    return this.service.findEventBySlug(
+      slug
+    );
 
   }
+
 
 
   // -------------------------
@@ -54,74 +63,139 @@ export class EventsController {
   @Post(':organizationId')
   @UseGuards(
     AuthGuard('jwt'),
-    OrganizationGuard
+    OrganizationGuard,
   )
-  @Roles('OWNER','ADMIN')
+  @Roles(
+    'OWNER',
+    'ADMIN'
+  )
   create(
-    @Param('organizationId') organizationId:string,
-    @Body() dto:CreateEventDto,
+
+    @Param('organizationId')
+    organizationId:string,
+
+    @Body()
+    dto:CreateEventDto,
+
   ) {
 
     return this.service.create(
       organizationId,
-      dto
+      dto,
     );
 
   }
+
+
+
+
+  @Get(':organizationId/:eventId')
+  @UseGuards(
+    AuthGuard('jwt'),
+    OrganizationGuard,
+  )
+  @Roles(
+    'OWNER',
+    'ADMIN'
+  )
+  findOne(
+
+    @Param('organizationId')
+    organizationId:string,
+
+    @Param('eventId')
+    eventId:string,
+
+  ) {
+
+    return this.service.findOne(
+      organizationId,
+      eventId,
+    );
+
+  }
+
+
 
 
 
   @Patch(':organizationId/:eventId/publish')
   @UseGuards(
     AuthGuard('jwt'),
-    OrganizationGuard
+    OrganizationGuard,
   )
-  @Roles('OWNER','ADMIN')
+  @Roles(
+    'OWNER',
+    'ADMIN'
+  )
   togglePublish(
-    @Param('organizationId') organizationId:string,
-    @Param('eventId') eventId:string,
+
+    @Param('organizationId')
+    organizationId:string,
+
+    @Param('eventId')
+    eventId:string,
+
   ) {
 
     return this.service.togglePublish(
       organizationId,
-      eventId
+      eventId,
     );
 
   }
+
+
+
 
 
   @Get(':eventId/attendees')
   @UseGuards(
     AuthGuard('jwt'),
-    OrganizationGuard
+    OrganizationGuard,
   )
-  @Roles('OWNER','ADMIN')
+  @Roles(
+    'OWNER',
+    'ADMIN'
+  )
   getAttendees(
-    @Param('eventId') eventId:string,
+
+    @Param('eventId')
+    eventId:string,
+
   ) {
 
     return this.service.getAttendees(
-      eventId
+      eventId,
     );
 
   }
+
+
 
 
 
   @Get(':organizationId')
   @UseGuards(
     AuthGuard('jwt'),
-    OrganizationGuard
+    OrganizationGuard,
   )
-  @Roles('OWNER','ADMIN')
+  @Roles(
+    'OWNER',
+    'ADMIN'
+  )
   findAll(
-    @Param('organizationId') organizationId:string,
+
+    @Param('organizationId')
+    organizationId:string,
+
   ) {
 
     return this.service.findAll(
-      organizationId
+      organizationId,
     );
 
   }
+
 
 }
