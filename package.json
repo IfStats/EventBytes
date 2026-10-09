@@ -7,12 +7,6 @@
     "build": "turbo build",
     "lint": "turbo lint"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "workerd"
-    ]
-  },
   "prisma": {
     "seed": "pnpm --dir apps/api exec ts-node prisma/seed.ts"
   },
@@ -20,9 +14,9 @@
     "@types/qrcode": "^1.5.6",
     "flag": "^5.0.1",
     "prisma": "6.16.2",
-    "tsx": "^4.23.1",
-    "turbo": "^2.5.5",
-    "typescript": "^5.9.0"
+    "tsx": "^4.23.15",
+    "turbo": "^2.11.7",
+    "typescript": "^5.9.3"
   },
   "packageManager": "pnpm@11.18.0",
   "dependencies": {
