@@ -14,3 +14,5 @@ turbo
 
 # Prisma generated client
 /apps/api/src/generated/prisma/
+node_modules/
+dist/
