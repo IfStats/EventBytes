@@ -1,70 +1,119 @@
-import { PrismaClient, OrganizationRole } from "@prisma/client";
+
+import "dotenv/config";
+
+import { PrismaPg } from "@prisma/adapter-pg";
 import * as argon2 from "argon2";
 
-const prisma = new PrismaClient();
+import {
+  PrismaClient,
+  OrganizationRole,
+} from "../src/generated/prisma/client";
 
-async function main() {
-  // Create or update admin user
-  const passwordHash = await argon2.hash("Password123!");
+function requiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
 
-  const user = await prisma.user.upsert({
-    where: {
-      email: "admin@eventbytes.com",
-    },
-    update: {
-      passwordHash,
-      firstName: "Joshua",
-      lastName: "Akunna",
-      isVerified: true,
-      isActive: true,
-    },
-    create: {
-      email: "admin@eventbytes.com",
-      passwordHash,
-      firstName: "Joshua",
-      lastName: "Akunna",
-      isVerified: true,
-      isActive: true,
-    },
-  });
-
-  // Use your existing organization
-  const organization =
-    await prisma.organization.findUnique({
-      where: {
-        id: "cms96mvtb0000w2jcsy2k872r",
-      },
-    });
-
-  if (!organization) {
+  if (!value) {
     throw new Error(
-      "Organization cms96mvtb0000w2jcsy2k872r not found."
+      `Missing required environment variable: ${name}`
     );
   }
 
-  // Create membership if missing
-  await prisma.membership.upsert({
-    where: {
-      userId_organizationId: {
-        userId: user.id,
-        organizationId: organization.id,
-      },
-    },
-    update: {
-      role: OrganizationRole.OWNER,
-    },
-    create: {
-      userId: user.id,
-      organizationId: organization.id,
-      role: OrganizationRole.OWNER,
-    },
-  });
-
-  console.log("✅ Admin user linked to organization.");
+  return value;
 }
 
-main()
-  .catch(console.error)
-  .finally(async () => {
-    await prisma.$disconnect();
+async function main(): Promise<void> {
+  if (process.env.NODE_ENV !== "development") {
+    throw new Error(
+      "Administrative seeding is only allowed in development."
+    );
+  }
+
+  const connectionString = requiredEnv("DATABASE_URL");
+  const adminEmail = requiredEnv("SEED_ADMIN_EMAIL")
+    .toLowerCase();
+  const adminPassword = requiredEnv("SEED_ADMIN_PASSWORD");
+  const organizationId = requiredEnv(
+    "SEED_ORGANIZATION_ID"
+  );
+
+  const adapter = new PrismaPg({
+    connectionString,
   });
+
+  const prisma = new PrismaClient({
+    adapter,
+  });
+
+  try {
+    console.log("Starting EventBytes development seed...");
+
+    const organization =
+      await prisma.organization.findUnique({
+        where: {
+          id: organizationId,
+        },
+      });
+
+    if (!organization) {
+      throw new Error(
+        "The configured organization was not found."
+      );
+    }
+
+    let user = await prisma.user.findUnique({
+      where: {
+        email: adminEmail,
+      },
+    });
+
+    if (!user) {
+      const passwordHash = await argon2.hash(
+        adminPassword
+      );
+
+      user = await prisma.user.create({
+        data: {
+          email: adminEmail,
+          passwordHash,
+          isVerified: true,
+          isActive: true,
+        },
+      });
+
+      console.log("Development admin user created.");
+    } else {
+      console.log(
+        "Existing admin user found. Password unchanged."
+      );
+    }
+
+    const membership =
+      await prisma.membership.upsert({
+        where: {
+          userId_organizationId: {
+            userId: user.id,
+            organizationId: organization.id,
+          },
+        },
+        update: {},
+        create: {
+          userId: user.id,
+          organizationId: organization.id,
+          role: OrganizationRole.OWNER,
+        },
+      });
+
+    console.log("Development seed completed.", {
+      userId: user.id,
+      organizationId: organization.id,
+      membershipRole: membership.role,
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+main().catch((error: unknown) => {
+  console.error("EventBytes seed failed:", error);
+  process.exitCode = 1;
+});

@@ -1,4 +1,7 @@
-import { PaymentStatus, RegistrationStatus } from '@prisma/client';
+import {
+  PaymentStatus,
+  RegistrationStatus,
+} from "../generated/prisma/client";
 import {
 	BadRequestException,
 	ForbiddenException,

@@ -1,89 +1,138 @@
-/// <reference types="jest" />
-import { Test, TestingModule } from '@nestjs/testing';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
 
-describe('AuthController', () => {
+import { Test, TestingModule } from "@nestjs/testing";
+
+import { AuthController } from "./auth.controller";
+import { AuthService } from "./auth.service";
+
+describe("AuthController", () => {
   let controller: AuthController;
+
   const authServiceMock = {
     register: jest.fn(),
     login: jest.fn(),
     refresh: jest.fn(),
+    getMe: jest.fn(),
   };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [AuthController],
-      providers: [
-        {
-          provide: AuthService,
-          useValue: authServiceMock,
-        },
-      ],
-    }).compile();
+    const module: TestingModule =
+      await Test.createTestingModule({
+        controllers: [AuthController],
+        providers: [
+          {
+            provide: AuthService,
+            useValue: authServiceMock,
+          },
+        ],
+      }).compile();
 
-    controller = module.get<AuthController>(AuthController);
+    controller =
+      module.get<AuthController>(AuthController);
   });
 
-  it('should be defined', () => {
+  it("should be defined", () => {
     expect(controller).toBeDefined();
   });
 
-  it('delegates register requests to the auth service', async () => {
-    authServiceMock.register.mockResolvedValue({ user: { id: 'user_1' } });
+  it("delegates registration to AuthService", async () => {
+    const dto = {
+      email: "test@example.com",
+      password: "Password123!",
+    };
+
+    const expectedResult = {
+      user: {
+        id: "user_1",
+      },
+    };
+
+    authServiceMock.register.mockResolvedValue(
+      expectedResult
+    );
 
     await expect(
-      controller.register({
-        email: 'test@example.com',
-        password: 'password123',
-      } as never),
-    ).resolves.toEqual({ user: { id: 'user_1' } });
+      controller.register(dto as never)
+    ).resolves.toEqual(expectedResult);
 
-    expect(authServiceMock.register).toHaveBeenCalledWith({
-      email: 'test@example.com',
-      password: 'password123',
-    });
+    expect(
+      authServiceMock.register
+    ).toHaveBeenCalledWith(dto);
   });
 
-  it('delegates login requests to the auth service', async () => {
-    authServiceMock.login.mockResolvedValue({ tokens: { accessToken: 'token' } });
+  it("delegates login to AuthService", async () => {
+    const dto = {
+      email: "test@example.com",
+      password: "Password123!",
+    };
+
+    const expectedResult = {
+      tokens: {
+        accessToken: "test-access-token",
+      },
+    };
+
+    authServiceMock.login.mockResolvedValue(
+      expectedResult
+    );
 
     await expect(
-      controller.login({
-        email: 'test@example.com',
-        password: 'Password123!',
-      } as never),
-    ).resolves.toEqual({ tokens: { accessToken: 'token' } });
+      controller.login(dto as never)
+    ).resolves.toEqual(expectedResult);
 
-    expect(authServiceMock.login).toHaveBeenCalledWith({
-      email: 'test@example.com',
-      password: 'Password123!',
-    });
+    expect(
+      authServiceMock.login
+    ).toHaveBeenCalledWith(dto);
   });
 
-  it('delegates refresh requests to the auth service', async () => {
-    authServiceMock.refresh.mockResolvedValue({ refreshToken: 'next-token' });
+  it("delegates token refresh to AuthService", async () => {
+    const expectedResult = {
+      refreshToken: "new-refresh-token",
+    };
 
-    await expect(controller.refresh('refresh-token')).resolves.toEqual({
-      refreshToken: 'next-token',
-    });
+    authServiceMock.refresh.mockResolvedValue(
+      expectedResult
+    );
 
-    expect(authServiceMock.refresh).toHaveBeenCalledWith('refresh-token');
+    await expect(
+      controller.refresh("old-refresh-token")
+    ).resolves.toEqual(expectedResult);
+
+    expect(
+      authServiceMock.refresh
+    ).toHaveBeenCalledWith(
+      "old-refresh-token"
+    );
   });
 
-  it('returns the authenticated user for me', () => {
+  it("returns the authenticated user", async () => {
     const request = {
       user: {
-        id: 'user_1',
-        email: 'test@example.com',
+        id: "user_1",
+        email: "test@example.com",
       },
-    } as never;
+    };
 
-    expect(controller.me(request)).toEqual({
-      id: 'user_1',
-      email: 'test@example.com',
-    });
+    const expectedUser = {
+      id: "user_1",
+      email: "test@example.com",
+    };
+
+    authServiceMock.getMe.mockResolvedValue(
+      expectedUser
+    );
+
+    await expect(
+      controller.getMe(request)
+    ).resolves.toEqual(expectedUser);
+
+    expect(
+      authServiceMock.getMe
+    ).toHaveBeenCalledTimes(1);
+
+    expect(
+      authServiceMock.getMe
+    ).toHaveBeenCalledWith("user_1");
   });
 });

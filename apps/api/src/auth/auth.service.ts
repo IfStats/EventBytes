@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'crypto';
-import { RefreshToken, User } from '@prisma/client';
+import type {
+  RefreshToken,
+  User,
+} from "../generated/prisma/client";
 import * as argon2 from 'argon2';
 
 import { PrismaService } from '../prisma/prisma.service';

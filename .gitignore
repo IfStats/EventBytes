@@ -10,3 +10,7 @@ coverage
 turbo
 *.log
 .DS_Store
+
+
+# Prisma generated client
+/apps/api/src/generated/prisma/
