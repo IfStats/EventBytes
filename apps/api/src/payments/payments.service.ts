@@ -4,38 +4,52 @@ import {
   RegistrationStatus,
 } from "../generated/prisma/client";
 
-import { randomUUID } from "crypto";
+import {
+  createHmac,
+  randomUUID,
+  timingSafeEqual,
+} from "crypto";
+
+import QRCode from "qrcode";
 
 import {
-	BadRequestException,
-	ForbiddenException,
-	Injectable,
-	NotFoundException,
-} from '@nestjs/common';
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { MailService } from '../mail/mail.service';
 
+
+
 @Injectable()
 export class PaymentsService {
-	constructor(
-		private prisma: PrismaService,
-		private ticketsService: TicketsService,
-		private mailService: MailService,
-		private httpService: HttpService,
-		private configService: ConfigService,
-	) {}
+  private readonly logger = new Logger(PaymentsService.name);
 
-	async initialize(
-		userId: string,
-		registrationId: string,
-	) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ticketsService: TicketsService,
+    private readonly mailService: MailService,
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  async initialize(
+    userId: string,
+    registrationId: string,
+  ) {
+    // Keep your existing initialize() implementation here.
+
 		const registration =
   await this.prisma.registration.findUnique({
     where: {
-      id: registrationId,
+    id: registrationId,
     },
     include: {
       user: true,
@@ -140,128 +154,308 @@ if (!Number.isSafeInteger(amount) || amount <= 0) {
 		};
 	}
 
-	async verify(reference: string) {
-		const response = await this.httpService.axiosRef.get(
-			`https://api.paystack.co/transaction/verify/${reference}`,
-			{
-				headers: {
-					Authorization:
-						`Bearer ${this.configService.get('PAYSTACK_SECRET_KEY')}`,
-				},
-			},
-		);
+async verify(reference: string, userId?: string) {
+  if (
+    typeof reference !== "string" ||
+    !/^[A-Za-z0-9._=-]{1,100}$/.test(reference)
+  ) {
+    throw new BadRequestException("Invalid payment reference");
+  }
 
-		if (!response.data.status) {
-			throw new BadRequestException('Verification failed');
-		}
+  const payment = await this.prisma.payment.findUnique({
+    where: { reference },
+    include: {
+      registration: {
+        include: {
+          user: true,
+          event: true,
+          ticketCategory: true,
+        },
+      },
+    },
+  });
 
-		const payment = await this.prisma.payment.findUnique({
-			where: {
-				reference,
-			},
-			include: {
-				registration: {
-					include: {
-						user: true,
-						event: true,
-						ticketCategory: true,
-					},
-				},
-			},
-		});
+  if (!payment) {
+    throw new NotFoundException("Payment not found");
+  }
 
-		if (!payment) {
-			throw new NotFoundException();
-		}
+  if (
+    userId !== undefined &&
+    payment.registration.userId !== userId
+  ) {
+    throw new ForbiddenException("Access denied");
+  }
 
-		if (response.data.data.status !== 'success') {
-			throw new BadRequestException(
-				'Payment not successful',
-			);
-		}
+  if (payment.provider !== PaymentProvider.PAYSTACK) {
+    throw new BadRequestException("Payment provider mismatch");
+  }
 
-		await this.prisma.payment.update({
-			where: {
-				id: payment.id,
-			},
-			data: {
-				status: PaymentStatus.PAID,
-				providerReference:
-					response.data.data.reference,
-				paidAt: new Date(),
-				metadata: response.data.data,
-			},
-		});
+  const secret = this.configService.get<string>(
+    "PAYSTACK_SECRET_KEY",
+  );
 
-		await this.prisma.registration.update({
-			where: {
-				id: payment.registration.id,
-			},
-			data: {
-				status: RegistrationStatus.CONFIRMED,
-			},
-		});
+  if (!secret) {
+    throw new Error("PAYSTACK_SECRET_KEY is not configured");
+  }
 
-		const ticket =
-			await this.ticketsService.issueTicket(
-				payment.registrationId,
-			);
+  const response = await this.httpService.axiosRef.get(
+    `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${secret}`,
+      },
+    },
+  );
 
-		await this.mailService.sendTicket(
-			payment.registration.user.email,
-			ticket,
-			payment.registration.event,
-		);
+  const transaction = response.data?.data;
 
-		return {
-			message: 'Payment verified',
-			ticket,
-		};
-	}
+  if (
+    response.data?.status !== true ||
+    transaction?.status !== "success"
+  ) {
+    throw new BadRequestException("Payment not successful");
+  }
 
-	async webhook(
-        payload:any,
-        signature:string,
+  const expectedAmount = Math.round(payment.amount * 100);
+
+  if (
+    !Number.isSafeInteger(expectedAmount) ||
+    expectedAmount <= 0
+  ) {
+    throw new BadRequestException(
+      "Invalid stored payment amount",
+    );
+  }
+
+  if (
+    transaction.reference !== payment.reference ||
+    transaction.currency !== payment.currency ||
+    typeof transaction.amount !== "number" ||
+    transaction.amount !== expectedAmount
+  ) {
+    throw new BadRequestException(
+      "Payment details do not match the original transaction",
+    );
+  }
+
+  const result = await this.prisma.$transaction(async (tx) => {
+    const claimedPayment = await tx.payment.updateMany({
+      where: {
+        id: payment.id,
+        status: PaymentStatus.PENDING,
+      },
+      data: {
+        status: PaymentStatus.PAID,
+        providerReference: transaction.reference,
+        paidAt: new Date(),
+        metadata: transaction,
+      },
+    });
+
+    if (claimedPayment.count === 0) {
+      const currentPayment = await tx.payment.findUnique({
+        where: { id: payment.id },
+        select: { status: true },
+      });
+
+      if (currentPayment?.status !== PaymentStatus.PAID) {
+        throw new ConflictException(
+          "Payment cannot be confirmed in its current state",
+        );
+      }
+
+      const existingTicket = await tx.ticket.findUnique({
+        where: {
+          registrationId: payment.registrationId,
+        },
+      });
+
+      if (!existingTicket) {
+        throw new ConflictException(
+          "Paid payment requires ticket reconciliation",
+        );
+      }
+
+      return {
+        newlyIssued: false,
+        ticket: existingTicket,
+      };
+    }
+
+    const claimedRegistration =
+      await tx.registration.updateMany({
+        where: {
+          id: payment.registrationId,
+          status: RegistrationStatus.PENDING_PAYMENT,
+        },
+        data: {
+          status: RegistrationStatus.CONFIRMED,
+        },
+      });
+
+    if (claimedRegistration.count === 0) {
+      throw new ConflictException(
+        "Registration already fulfilled; payment requires reconciliation",
+      );
+    }
+
+    const ticket = await tx.ticket.create({
+      data: {
+        registrationId: payment.registrationId,
+        ticketNumber:
+          `EVT-${new Date().getUTCFullYear()}-${randomUUID()}`,
+        qrToken: randomUUID(),
+      },
+    });
+
+    return {
+      newlyIssued: true,
+      ticket,
+    };
+  });
+
+  // The database transaction has committed.
+
+  const ticketNumber = result.ticket.ticketNumber;
+  const qrToken = result.ticket.qrToken;
+
+  const qrCode = await QRCode.toDataURL(
+    JSON.stringify({
+      ticketNumber,
+      qrToken,
+      registrationId: payment.registrationId,
+    }),
+  );
+
+  const ticket = {
+    ticket: result.ticket,
+    ticketNumber,
+    qrToken,
+    qrCode,
+  };
+
+  let emailDelivery:
+    | "accepted"
+    | "failed"
+    | "not_required" = "not_required";
+
+  if (result.newlyIssued) {
+    try {
+      const delivery = await this.mailService.sendTicket(
+        payment.registration.user.email,
+        ticket,
+        payment.registration.event,
+      );
+
+      if (
+        delivery &&
+        typeof delivery === "object" &&
+        "error" in delivery &&
+        delivery.error
+      ) {
+        throw new Error(
+          "Mail provider rejected ticket email",
+        );
+      }
+
+      emailDelivery = "accepted";
+    } catch (error) {
+      emailDelivery = "failed";
+
+      this.logger.error(
+        `Ticket email failed for payment ${payment.id}`,
+        error instanceof Error
+          ? error.stack
+          : String(error),
+      );
+    }
+  }
+
+  return {
+    message: result.newlyIssued
+      ? "Payment verified"
+      : "Payment already processed",
+    ticket,
+    emailDelivery,
+  };
+}
+
+async webhook(
+  payload: unknown,
+  signature?: string,
+  rawBody?: Buffer,
 ) {
+  const secret = this.configService.get<string>(
+    "PAYSTACK_SECRET_KEY",
+  );
 
-const crypto = require('crypto');
+  if (!secret) {
+    throw new Error("PAYSTACK_SECRET_KEY is not configured");
+  }
 
+  if (
+    !Buffer.isBuffer(rawBody) ||
+    typeof signature !== "string" ||
+    !/^[0-9a-f]{128}$/i.test(signature)
+  ) {
+    throw new BadRequestException(
+      "Invalid webhook signature",
+    );
+  }
 
-const hash =
-crypto
-.createHmac(
-        'sha512',
-        this.configService.get('PAYSTACK_SECRET_KEY')
-)
-.update(JSON.stringify(payload))
-.digest('hex');
+  const expectedSignature = createHmac(
+    "sha512",
+    secret,
+  )
+    .update(rawBody)
+    .digest();
 
+  const receivedSignature = Buffer.from(
+    signature,
+    "hex",
+  );
 
-if(hash !== signature){
+  if (
+    !timingSafeEqual(
+      expectedSignature,
+      receivedSignature,
+    )
+  ) {
+    throw new BadRequestException(
+      "Invalid webhook signature",
+    );
+  }
 
-throw new BadRequestException(
-        'Invalid webhook signature',
-);
+  if (!payload || typeof payload !== "object") {
+    throw new BadRequestException(
+      "Invalid webhook payload",
+    );
+  }
 
-}
+  const event = payload as {
+    event?: unknown;
+    data?: {
+      reference?: unknown;
+    };
+  };
 
+  if (event.event !== "charge.success") {
+    return { message: "Event ignored" };
+  }
 
+  const reference = event.data?.reference;
 
-if(payload.event !== 'charge.success'){
+  if (
+    typeof reference !== "string" ||
+    !/^[A-Za-z0-9._=-]{1,100}$/.test(reference)
+  ) {
+    throw new BadRequestException(
+      "Invalid payment reference",
+    );
+  }
 
-return {
-        message:'Event ignored',
-};
-
-}
-
-
-
-const reference =
-payload.data.reference;
-
-
-return this.verify(reference);
-
+  // Revalidate the transaction against Paystack.
+  // The webhook payload alone must never authorize issuance.
+  return this.verify(reference);
 }
 }

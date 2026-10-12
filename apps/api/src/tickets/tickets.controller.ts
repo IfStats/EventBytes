@@ -1,39 +1,12 @@
-import { Body, Controller, Post, Param } from '@nestjs/common';
-import { TicketsService } from './tickets.service';
 
-@Controller('tickets')
+import { Controller } from "@nestjs/common";
+
+@Controller("tickets")
 export class TicketsController {
-
-	constructor(
-		private readonly ticketsService: TicketsService
-	) {}
-
-
-	@Post('issue/:registrationId')
-	issueTicket(
-		@Param('registrationId') registrationId: string
-	) {
-
-		return this.ticketsService.issueTicket(
-			registrationId
-		);
-
-	}
-
-
-	@Post('checkin')
-	checkIn(
-		@Body() body: {
-			ticketNumber: string;
-			checkedInBy?: string;
-		}
-	) {
-
-		return this.ticketsService.checkIn(
-			body.ticketNumber,
-			body.checkedInBy
-		);
-
-	}
-
+  // Direct public ticket issuance is disabled.
+  // Payment verification issues tickets internally
+  // within an authenticated, verified payment flow.
+  //
+  // Check-in endpoints will be restored with
+  // organizer membership and role authorization.
 }

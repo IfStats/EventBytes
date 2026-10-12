@@ -69,17 +69,11 @@ export class AuthService {
         'Invalid credentials',
       );
     }
-
-    console.log('Email received:', loginDto.email);
-    console.log('User found:', !!user);
-    console.log('Stored email:', user.email);
-
     const passwordValid = await argon2.verify(
       user.passwordHash,
       loginDto.password,
     );
 
-    console.log('Password valid:', passwordValid);
 
     if (!passwordValid) {
       throw new UnauthorizedException(

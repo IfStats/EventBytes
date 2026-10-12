@@ -41,13 +41,18 @@ describe("PaymentsController", () => {
     paymentsServiceMock.verify.mockResolvedValue(
       expected,
     );
+const request = {
+  user: { id: "user_1" },
+} as Parameters<PaymentsController["verify"]>[1];
 
-    await expect(
-      controller.verify("payment_ref_1"),
-    ).resolves.toEqual(expected);
+await expect(
+  controller.verify("payment_ref_1", request),
+).resolves.toEqual(expected);
 
-    expect(
-      paymentsServiceMock.verify,
-    ).toHaveBeenCalledWith("payment_ref_1");
+expect(paymentsServiceMock.verify).toHaveBeenCalledWith(
+  "payment_ref_1",
+  "user_1",
+);
+
   });
 });

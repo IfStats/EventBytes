@@ -2,6 +2,9 @@
 import {
   NotFoundException,
 } from "@nestjs/common";
+
+import { createHmac } from "crypto";
+
 import {
   Test,
   TestingModule,
@@ -16,18 +19,21 @@ import { MailService } from "../mail/mail.service";
 
 describe("PaymentsService", () => {
   let service: PaymentsService;
+const prismaMock = {
+  $transaction: jest.fn(),
 
-  const prismaMock = {
-    registration: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
-    },
-    payment: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
-    },
-  };
+  registration: {
+    findUnique: jest.fn(),
+    update: jest.fn(),
+  },
+
+  payment: {
+    create: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+  },
+};
+
 
   const ticketsServiceMock = {
     issueTicket: jest.fn(),
@@ -188,4 +194,269 @@ it("initializes Paystack using the configured currency", async () => {
   });
 });
 
+
+it("rejects a webhook with an invalid signature", async () => {
+  const payload = {
+    event: "charge.success",
+    data: { reference: "EVT-test123" },
+  };
+
+  const rawBody = Buffer.from(JSON.stringify(payload));
+
+  configServiceMock.get.mockReturnValue("test_secret");
+
+  await expect(
+    service.webhook(
+      payload,
+      "0".repeat(128),
+      rawBody,
+    ),
+  ).rejects.toThrow("Invalid webhook signature");
+
+  expect(httpServiceMock.axiosRef.get).not.toHaveBeenCalled();
+});
+
+it("accepts a signed non-payment webhook without processing payment", async () => {
+  const payload = {
+    event: "transfer.success",
+    data: { reference: "EVT-test123" },
+  };
+
+  const rawBody = Buffer.from(JSON.stringify(payload));
+  const secret = "test_secret";
+
+  const signature = createHmac("sha512", secret)
+    .update(rawBody)
+    .digest("hex");
+
+  configServiceMock.get.mockReturnValue(secret);
+
+  await expect(
+    service.webhook(payload, signature, rawBody),
+  ).resolves.toEqual({
+    message: "Event ignored",
+  });
+
+  expect(prismaMock.payment.update).not.toHaveBeenCalled();
+  expect(ticketsServiceMock.issueTicket).not.toHaveBeenCalled();
+});
+
+
+it("rejects verification by another user", async () => {
+  prismaMock.payment.findUnique.mockResolvedValue({
+    id: "payment_1",
+    reference: "EVT-test123",
+    provider: "PAYSTACK",
+    amount: 50,
+    currency: "GHS",
+    registration: {
+      userId: "owner_1",
+    },
+  });
+
+  await expect(
+    service.verify("EVT-test123", "other_user"),
+  ).rejects.toThrow("Access denied");
+
+  expect(httpServiceMock.axiosRef.get).not.toHaveBeenCalled();
+  expect(prismaMock.payment.update).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["reference", { reference: "EVT-wrong", amount: 5000, currency: "GHS" }],
+  ["amount", { reference: "EVT-test123", amount: 1000, currency: "GHS" }],
+  ["currency", { reference: "EVT-test123", amount: 5000, currency: "NGN" }],
+])("rejects mismatched Paystack %s", async (_field, details) => {
+  prismaMock.payment.findUnique.mockResolvedValue({
+    id: "payment_1",
+    reference: "EVT-test123",
+    provider: "PAYSTACK",
+    status: "PENDING",
+    amount: 50,
+    currency: "GHS",
+    registration: {
+      userId: "user_1",
+      user: { email: "buyer@example.com" },
+    },
+  });
+
+  configServiceMock.get.mockReturnValue("test_secret");
+
+  httpServiceMock.axiosRef.get.mockResolvedValue({
+    data: {
+      status: true,
+      data: {
+        status: "success",
+        ...details,
+      },
+    },
+  });
+
+  await expect(
+    service.verify("EVT-test123", "user_1"),
+  ).rejects.toThrow(
+    "Payment details do not match the original transaction",
+  );
+
+  expect(prismaMock.payment.update).not.toHaveBeenCalled();
+  expect(prismaMock.registration.update).not.toHaveBeenCalled();
+  expect(ticketsServiceMock.issueTicket).not.toHaveBeenCalled();
+});
+
+describe("atomic payment fulfillment", () => {
+  const reference = "EVT-test123";
+
+  const ticket = {
+    id: "ticket_1",
+    registrationId: "reg_1",
+    ticketNumber: "EVT-2026-existing",
+    qrToken: "existing-qr-token",
+  };
+
+  const transaction = {
+    reference,
+    amount: 5000,
+    currency: "GHS",
+    status: "success",
+  };
+
+  let txMock: {
+    payment: {
+      updateMany: jest.Mock;
+      findUnique: jest.Mock;
+    };
+    registration: {
+      updateMany: jest.Mock;
+    };
+    ticket: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+    };
+  };
+
+  beforeEach(() => {
+    txMock = {
+      payment: {
+        updateMany: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      registration: {
+        updateMany: jest.fn(),
+      },
+      ticket: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+      },
+    };
+
+    prismaMock.$transaction.mockImplementation(
+      async (callback) => callback(txMock),
+    );
+
+    prismaMock.payment.findUnique.mockResolvedValue({
+      id: "payment_1",
+      reference,
+      amount: 50,
+      currency: "GHS",
+      provider: "PAYSTACK",
+      status: "PENDING",
+      registrationId: "reg_1",
+      registration: {
+        id: "reg_1",
+        userId: "user_1",
+        user: {
+          email: "buyer@example.com",
+        },
+        event: {
+          name: "Test Event",
+        },
+      },
+    });
+
+    configServiceMock.get.mockReturnValue("test_secret");
+
+    httpServiceMock.axiosRef.get.mockResolvedValue({
+      data: {
+        status: true,
+        data: transaction,
+      },
+    });
+
+    mailServiceMock.sendTicket.mockResolvedValue({
+      data: { id: "email_1" },
+      error: null,
+    });
+  });
+
+  it("confirms payment and issues ticket atomically", async () => {
+    txMock.payment.updateMany.mockResolvedValue({
+      count: 1,
+    });
+
+    txMock.registration.updateMany.mockResolvedValue({
+      count: 1,
+    });
+
+    txMock.ticket.create.mockResolvedValue(ticket);
+
+    const result = await service.verify(
+      reference,
+      "user_1",
+    );
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+
+    expect(txMock.payment.updateMany).toHaveBeenCalled();
+    expect(txMock.registration.updateMany).toHaveBeenCalled();
+    expect(txMock.ticket.create).toHaveBeenCalledTimes(1);
+
+    expect(result.message).toBe("Payment verified");
+
+    expect(mailServiceMock.sendTicket).toHaveBeenCalledTimes(1);
+  });
+  it("does not reissue tickets for an already-paid payment", async () => {
+    txMock.payment.updateMany.mockResolvedValue({
+      count: 0,
+    });
+
+    txMock.payment.findUnique.mockResolvedValue({
+      status: "PAID",
+    });
+
+    txMock.ticket.findUnique.mockResolvedValue(ticket);
+
+    const result = await service.verify(
+      reference,
+      "user_1",
+    );
+
+    expect(result.message).toBe(
+      "Payment already processed",
+    );
+
+    expect(txMock.ticket.create).not.toHaveBeenCalled();
+    expect(mailServiceMock.sendTicket).not.toHaveBeenCalled();
+  });
+
+  it("rejects a second payment for an already-fulfilled registration", async () => {
+    txMock.payment.updateMany.mockResolvedValue({
+      count: 1,
+    });
+
+    txMock.registration.updateMany.mockResolvedValue({
+      count: 0,
+    });
+
+    await expect(
+      service.verify(reference, "user_1"),
+    ).rejects.toThrow(
+      "Registration already fulfilled; payment requires reconciliation",
+    );
+
+    expect(txMock.ticket.create).not.toHaveBeenCalled();
+    expect(mailServiceMock.sendTicket).not.toHaveBeenCalled();
+  });
+  // End of atomic payment fulfillment describe.
+  });
+  // End of PaymentsService describe.
 });
