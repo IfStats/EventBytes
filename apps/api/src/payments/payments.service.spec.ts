@@ -107,4 +107,85 @@ describe("PaymentsService", () => {
       }),
     );
   });
+it("rejects unsupported payment providers", async () => {
+  prismaMock.registration.findUnique.mockResolvedValue({
+    id: "reg_1",
+    userId: "user_1",
+    payments: [],
+    user: { email: "buyer@example.com" },
+    ticketCategory: { price: 50 },
+    event: {
+      organization: {
+        country: {
+          currency: "GHS",
+          paymentProvider: "FLUTTERWAVE",
+        },
+      },
+    },
+  });
+
+  await expect(
+    service.initialize("user_1", "reg_1"),
+  ).rejects.toThrow(
+    "The configured payment provider is not yet supported",
+  );
+
+  expect(httpServiceMock.axiosRef.post).not.toHaveBeenCalled();
+  expect(prismaMock.payment.create).not.toHaveBeenCalled();
+});
+
+it("initializes Paystack using the configured currency", async () => {
+  prismaMock.registration.findUnique.mockResolvedValue({
+    id: "reg_1",
+    userId: "user_1",
+    payments: [],
+    user: { email: "buyer@example.com" },
+    ticketCategory: { price: 50 },
+    event: {
+      organization: {
+        country: {
+          currency: "GHS",
+          paymentProvider: "PAYSTACK",
+        },
+      },
+    },
+  });
+
+  configServiceMock.get.mockReturnValue("test_secret");
+
+  httpServiceMock.axiosRef.post.mockResolvedValue({
+    data: {
+      data: {
+        authorization_url: "https://checkout.paystack.com/test",
+      },
+    },
+  });
+
+  prismaMock.payment.create.mockResolvedValue({
+    id: "payment_1",
+  });
+
+  await service.initialize("user_1", "reg_1");
+
+  expect(httpServiceMock.axiosRef.post).toHaveBeenCalledWith(
+    "https://api.paystack.co/transaction/initialize",
+    expect.objectContaining({
+      email: "buyer@example.com",
+      currency: "GHS",
+      amount: "5000",
+      reference: expect.stringMatching(/^EVT-[0-9a-f-]+$/),
+    }),
+    expect.any(Object),
+  );
+
+  expect(prismaMock.payment.create).toHaveBeenCalledWith({
+    data: expect.objectContaining({
+      registrationId: "reg_1",
+      currency: "GHS",
+      provider: "PAYSTACK",
+      status: "PENDING",
+    }),
+  });
+});
+
 });

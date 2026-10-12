@@ -1,7 +1,11 @@
 import {
+  PaymentProvider,
   PaymentStatus,
   RegistrationStatus,
 } from "../generated/prisma/client";
+
+import { randomUUID } from "crypto";
+
 import {
 	BadRequestException,
 	ForbiddenException,
@@ -65,20 +69,23 @@ export class PaymentsService {
 		const paid = registration.payments.find(
 			(payment) => payment.status === PaymentStatus.PAID,
 		);
+const country = registration.event.organization.country;
 
-		const country =
-  registration.event.organization.country;
-
-const currency =
-  country.currency;
-
+const currency = country.currency;
 const provider = country.paymentProvider;
 
 if (!provider) {
   throw new BadRequestException(
-    'Payment provider not configured for organizer country',
+    "Payment provider not configured for organizer country",
   );
 }
+
+if (provider !== PaymentProvider.PAYSTACK) {
+  throw new BadRequestException(
+    "The configured payment provider is not yet supported",
+  );
+}
+
 
 		if (paid) {
 			throw new BadRequestException(
@@ -88,25 +95,32 @@ if (!provider) {
 
 		// initialize Paystack here
 
-		const reference = `EVT_${Date.now()}`;
-		const amount = registration.ticketCategory.price * 100;
+		const reference = `EVT-${randomUUID()}`;
+
+const price = registration.ticketCategory.price;
+const amount = Math.round(price * 100);
+
+if (!Number.isSafeInteger(amount) || amount <= 0) {
+  throw new BadRequestException("Invalid payment amount");
+}
 
 		const response = await this.httpService.axiosRef.post(
-			'https://api.paystack.co/transaction/initialize',
-			{
-				email: registration.user.email,
-				amount,
-				reference,
-				callback_url:
-					process.env.PAYSTACK_CALLBACK_URL,
-			},
-			{
-				headers: {
-					Authorization:
-						`Bearer ${this.configService.get('PAYSTACK_SECRET_KEY')}`,
-				},
-			},
-		);
+  "https://api.paystack.co/transaction/initialize",
+  {
+    email: registration.user.email,
+    amount: String(amount),
+    currency,
+    reference,
+    callback_url: process.env.PAYSTACK_CALLBACK_URL,
+  },
+  {
+    headers: {
+      Authorization: `Bearer ${this.configService.get(
+        "PAYSTACK_SECRET_KEY",
+      )}`,
+    },
+  },
+);
 
 		await this.prisma.payment.create({
 			data: {
