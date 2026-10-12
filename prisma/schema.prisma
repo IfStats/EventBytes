@@ -270,7 +270,7 @@ model Payment {
 
   reference String @unique
 
-  provider PaymentProvider @default(PAYSTACK)
+  provider PaymentProvider
 
   providerReference String?
   paidAt            DateTime?

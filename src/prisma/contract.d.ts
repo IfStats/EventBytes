@@ -21,7 +21,7 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'5d0b5c3ca2de0b9d63905ed1bf7d05e9af22405e547d7c1a6df0f0b45ff2c158'>;
+  StorageHashBase<'da4c13593fbfca5ff466714908d6d8d1779755357cef45e9c5df1fc53830ea90'>;
 export type ExecutionHash =
   ExecutionHashBase<'12c449f3417efd225f52483e7c51f22c3790c86b0a9b392db7e85d4b8573c409'>;
 export type ProfileHash =
@@ -1465,10 +1465,6 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/enum';
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'pg/enum@1', 'PAYSTACK'>;
-                  };
                   readonly typeParams: { readonly typeName: 'PaymentProvider' };
                   readonly many: false;
                 };

@@ -2423,10 +2423,6 @@
                 "provider": {
                   "codecId": "pg/enum@1",
                   "dataType": "pg/enum",
-                  "default": {
-                    "kind": "literal",
-                    "value": "PAYSTACK"
-                  },
                   "nullable": false,
                   "typeParams": {
                     "typeName": "PaymentProvider"
@@ -3269,7 +3265,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5d0b5c3ca2de0b9d63905ed1bf7d05e9af22405e547d7c1a6df0f0b45ff2c158"
+    "storageHash": "da4c13593fbfca5ff466714908d6d8d1779755357cef45e9c5df1fc53830ea90"
   },
   "execution": {
     "executionHash": "12c449f3417efd225f52483e7c51f22c3790c86b0a9b392db7e85d4b8573c409",

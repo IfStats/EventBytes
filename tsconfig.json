@@ -4,15 +4,18 @@
     "module": "preserve",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "outDir": "dist"
   },
   "include": [
-    "**/*.ts"
+    "src/prisma/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "apps",
+    "prisma"
   ]
 }
