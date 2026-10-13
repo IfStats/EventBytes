@@ -14,15 +14,35 @@ describe('RegistrationsService', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
     },
+
     ticketCategory: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      findFirst: jest.fn(),
+      updateMany: jest.fn(),
+      fields: {
+        quantity: 'quantity_field_ref',
+      },
     },
+
     $transaction: jest.fn(),
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback({
+        ticketCategory: {
+          updateMany: prismaMock.ticketCategory.updateMany,
+          findFirst: prismaMock.ticketCategory.findFirst,
+        },
+        registration: {
+          findFirst: prismaMock.registration.findFirst,
+          create: prismaMock.registration.create,
+        },
+      }),
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -100,5 +120,95 @@ describe('RegistrationsService', () => {
         },
       }),
     );
+  });
+
+  it('atomically reserves an available ticket', async () => {
+    prismaMock.ticketCategory.updateMany.mockResolvedValue({
+      count: 1,
+    });
+
+    prismaMock.registration.findFirst.mockResolvedValue(null);
+
+    prismaMock.registration.create.mockResolvedValue({
+      id: 'reg_new',
+      status: 'PENDING_PAYMENT',
+    });
+
+    const result = await service.create('user_1', {
+      eventId: 'event_1',
+      ticketTypeId: 'cat_1',
+    });
+
+    expect(prismaMock.ticketCategory.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'cat_1',
+        eventId: 'event_1',
+        sold: {
+          lt: 'quantity_field_ref',
+        },
+      },
+      data: {
+        sold: {
+          increment: 1,
+        },
+      },
+    });
+
+    expect(result.registration.id).toBe('reg_new');
+  });
+
+  it('rejects a sold-out category', async () => {
+    prismaMock.ticketCategory.updateMany.mockResolvedValue({
+      count: 0,
+    });
+
+    prismaMock.ticketCategory.findFirst.mockResolvedValue({
+      id: 'cat_1',
+    });
+
+    await expect(
+      service.create('user_1', {
+        eventId: 'event_1',
+        ticketTypeId: 'cat_1',
+      }),
+    ).rejects.toThrow('Tickets sold out');
+
+    expect(prismaMock.registration.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a category belonging to another event', async () => {
+    prismaMock.ticketCategory.updateMany.mockResolvedValue({
+      count: 0,
+    });
+
+    prismaMock.ticketCategory.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.create('user_1', {
+        eventId: 'event_1',
+        ticketTypeId: 'cat_other',
+      }),
+    ).rejects.toThrow('Ticket category not found for this event');
+
+    expect(prismaMock.registration.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate active registrations', async () => {
+    prismaMock.ticketCategory.updateMany.mockResolvedValue({
+      count: 1,
+    });
+
+    prismaMock.registration.findFirst.mockResolvedValue({
+      id: 'reg_existing',
+    });
+
+    await expect(
+      service.create('user_1', {
+        eventId: 'event_1',
+        ticketTypeId: 'cat_1',
+      }),
+    ).rejects.toThrow('You already registered for this ticket');
+
+    expect(prismaMock.registration.create).not.toHaveBeenCalled();
   });
 });

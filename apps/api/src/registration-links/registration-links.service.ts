@@ -106,7 +106,6 @@ export class RegistrationLinksService {
       where: {
         slug,
       },
-
       include: {
         event: true,
       },
@@ -120,71 +119,83 @@ export class RegistrationLinksService {
       where: {
         id: ticketCategoryId,
       },
-    });
-
-    if (!ticketCategory) {
-      throw new NotFoundException('Ticket category not found');
-    }
-
-    if (ticketCategory.sold >= ticketCategory.quantity) {
-      throw new BadRequestException('Tickets sold out');
-    }
-
-    const existingRegistration = await this.prisma.registration.findFirst({
-      where: {
-        userId,
-
-        eventId: link.eventId,
-
-        ticketCategoryId,
-
-        status: {
-          in: ['PENDING_PAYMENT', 'CONFIRMED'],
-        },
+      select: {
+        id: true,
+        eventId: true,
+        name: true,
+        price: true,
       },
     });
 
-    if (existingRegistration) {
-      throw new BadRequestException('You already registered for this ticket');
+    if (!ticketCategory || ticketCategory.eventId !== link.eventId) {
+      throw new NotFoundException('Ticket category not found for this event');
     }
 
-    const registration = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.registration.create({
-        data: {
-          userId,
-
-          eventId: link.eventId,
-
-          ticketCategoryId,
-
-          status: 'PENDING_PAYMENT',
-        },
-      });
-
-      await tx.ticketCategory.update({
-        where: {
-          id: ticketCategoryId,
-        },
-
-        data: {
-          sold: {
-            increment: 1,
+    const registration = await this.prisma.$transaction(
+      async (tx) => {
+        // Reserve inventory only when capacity remains.
+        const claimed = await tx.ticketCategory.updateMany({
+          where: {
+            id: ticketCategoryId,
+            eventId: link.eventId,
+            sold: {
+              lt: this.prisma.ticketCategory.fields.quantity,
+            },
           },
-        },
-      });
+          data: {
+            sold: {
+              increment: 1,
+            },
+          },
+        });
 
-      return created;
-    });
+        if (claimed.count !== 1) {
+          throw new BadRequestException('Tickets sold out');
+        }
+
+        // Check duplicates after the inventory claim.
+        // The category update serializes competing claims.
+        const existing = await tx.registration.findFirst({
+          where: {
+            userId,
+            eventId: link.eventId,
+            ticketCategoryId,
+            status: {
+              in: ['PENDING_PAYMENT', 'CONFIRMED', 'CHECKED_IN'],
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (existing) {
+          throw new BadRequestException(
+            'You already registered for this ticket',
+          );
+        }
+
+        // Failure here rolls back the inventory claim.
+        return tx.registration.create({
+          data: {
+            userId,
+            eventId: link.eventId,
+            ticketCategoryId,
+            status: 'PENDING_PAYMENT',
+          },
+        });
+      },
+      {
+        maxWait: 20_000,
+        timeout: 20_000,
+      },
+    );
 
     return {
       registrationId: registration.id,
-
       event: link.event.name,
-
       ticketCategory: ticketCategory.name,
-
       amount: ticketCategory.price,
-
       status: registration.status,
     };
   }

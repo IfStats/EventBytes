@@ -14,69 +14,92 @@ export class RegistrationsService {
   async create(userId: string, dto: CreateRegistrationDto) {
     const ticketCategoryId = dto.ticketTypeId;
 
-    const existing = await this.prisma.registration.findFirst({
-      where: {
-        userId,
-        eventId: dto.eventId,
-        ticketCategoryId,
-      },
-    });
-
-    if (existing) {
-      throw new BadRequestException('You already registered for this ticket');
-    }
-
-    const registration = await this.prisma.$transaction(async (tx) => {
-      const ticketCategory = await tx.ticketCategory.findUnique({
-        where: {
-          id: ticketCategoryId,
-        },
-      });
-
-      if (!ticketCategory) {
-        throw new BadRequestException('Ticket category not found');
-      }
-
-      if (ticketCategory.sold >= ticketCategory.quantity) {
-        throw new BadRequestException('Tickets sold out');
-      }
-
-      const created = await tx.registration.create({
-        data: {
-          userId,
-
-          eventId: dto.eventId,
-
-          ticketCategoryId,
-
-          status: 'PENDING_PAYMENT',
-        },
-
-        include: {
-          event: true,
-
-          ticketCategory: true,
-        },
-      });
-
-      await tx.ticketCategory.update({
-        where: {
-          id: ticketCategoryId,
-        },
-
-        data: {
-          sold: {
-            increment: 1,
+    const registration = await this.prisma.$transaction(
+      async (tx) => {
+        // Atomically claim one available ticket.
+        // PostgreSQL prevents concurrent updates from
+        // overselling the same category.
+        const claimed = await tx.ticketCategory.updateMany({
+          where: {
+            id: ticketCategoryId,
+            eventId: dto.eventId,
+            sold: {
+              lt: this.prisma.ticketCategory.fields.quantity,
+            },
           },
-        },
-      });
+          data: {
+            sold: {
+              increment: 1,
+            },
+          },
+        });
 
-      return created;
-    });
+        if (claimed.count !== 1) {
+          const category = await tx.ticketCategory.findFirst({
+            where: {
+              id: ticketCategoryId,
+              eventId: dto.eventId,
+            },
+            select: {
+              id: true,
+            },
+          });
+
+          if (!category) {
+            throw new BadRequestException(
+              'Ticket category not found for this event',
+            );
+          }
+
+          throw new BadRequestException('Tickets sold out');
+        }
+
+        // This check happens AFTER acquiring the
+        // category's write lock. Concurrent requests
+        // for the same category are serialized.
+        const existing = await tx.registration.findFirst({
+          where: {
+            userId,
+            eventId: dto.eventId,
+            ticketCategoryId,
+            status: {
+              in: ['PENDING_PAYMENT', 'CONFIRMED', 'CHECKED_IN'],
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (existing) {
+          throw new BadRequestException(
+            'You already registered for this ticket',
+          );
+        }
+
+        // If creation fails, the inventory increment
+        // rolls back with this transaction.
+        return tx.registration.create({
+          data: {
+            userId,
+            eventId: dto.eventId,
+            ticketCategoryId,
+            status: 'PENDING_PAYMENT',
+          },
+          include: {
+            event: true,
+            ticketCategory: true,
+          },
+        });
+      },
+      {
+        maxWait: 20_000,
+        timeout: 20_000,
+      },
+    );
 
     return {
       message: 'Registration created. Awaiting payment',
-
       registration,
     };
   }
