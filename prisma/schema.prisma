@@ -255,6 +255,8 @@ model Ticket {
 
   checkedInAt DateTime?
 
+  emailOutbox TicketEmailOutbox?
+
   createdAt DateTime @default(now())
 }
 
@@ -283,4 +285,34 @@ model Payment {
 
   @@index([registrationId])
   @@index([status])
+}
+
+enum TicketEmailStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+model TicketEmailOutbox {
+  id String @id @default(cuid())
+
+  ticketId String @unique
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  status TicketEmailStatus @default(PENDING)
+
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  leaseUntil    DateTime?
+
+  providerEmailId String?
+  lastError       String? @db.Text
+
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([leaseUntil])
 }
