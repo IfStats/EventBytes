@@ -7,6 +7,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRegistrationDto } from './dto/create-registration.dto';
 
+import { getReservationExpiresAt } from '../common/utils/reservation-expiry';
+
 @Injectable()
 export class RegistrationsService {
   constructor(private prisma: PrismaService) {}
@@ -85,6 +87,7 @@ export class RegistrationsService {
             eventId: dto.eventId,
             ticketCategoryId,
             status: 'PENDING_PAYMENT',
+            reservationExpiresAt: getReservationExpiresAt(),
           },
           include: {
             event: true,

@@ -221,8 +221,9 @@ model Registration {
   checkedIn   Boolean   @default(false)
   checkedInAt DateTime?
   checkedInBy String?
-
   status RegistrationStatus @default(CONFIRMED)
+  reservationExpiresAt DateTime?
+  reservationReleasedAt DateTime?
 
   createdAt DateTime @default(now())
 
@@ -238,6 +239,8 @@ model Registration {
 
   @@index([eventId])
   @@index([userId])
+  @@index([status, reservationExpiresAt])
+
 }
 
 model Ticket {

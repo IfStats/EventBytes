@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { randomBytes } from 'crypto';
 import { PaymentsService } from '../payments/payments.service';
+import { getReservationExpiresAt } from '../common/utils/reservation-expiry';
 
 @Injectable()
 export class RegistrationLinksService {
@@ -182,6 +183,7 @@ export class RegistrationLinksService {
             eventId: link.eventId,
             ticketCategoryId,
             status: 'PENDING_PAYMENT',
+            reservationExpiresAt: getReservationExpiresAt(),
           },
         });
       },

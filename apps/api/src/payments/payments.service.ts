@@ -90,6 +90,28 @@ export class PaymentsService {
       throw new BadRequestException('Registration already paid');
     }
 
+    // Only active, unpaid reservations may start checkout.
+    if (
+      registration.status !== RegistrationStatus.PENDING_PAYMENT ||
+      registration.reservationReleasedAt != null
+    ) {
+      throw new ConflictException(
+        'Registration is no longer available for payment',
+      );
+    }
+
+    // Null supports legacy registrations created before
+    // reservation expiry was introduced.
+    if (
+      registration.reservationExpiresAt !== null &&
+      registration.reservationExpiresAt !== undefined &&
+      registration.reservationExpiresAt.getTime() <= Date.now()
+    ) {
+      throw new ConflictException(
+        'Ticket reservation has expired. Please register again.',
+      );
+    }
+
     const secret = this.configService.get<string>('PAYSTACK_SECRET_KEY');
 
     if (!secret) {

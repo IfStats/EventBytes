@@ -138,6 +138,9 @@ describe('PaymentsService', () => {
     prismaMock.registration.findUnique.mockResolvedValue({
       id: 'reg_1',
       userId: 'user_1',
+      status: 'PENDING_PAYMENT',
+      reservationExpiresAt: null,
+      reservationReleasedAt: null,
       payments: [],
       user: {
         email: 'buyer@example.com',
@@ -151,6 +154,9 @@ describe('PaymentsService', () => {
             currency: 'GHS',
             paymentProvider: 'PAYSTACK',
           },
+          status: 'PENDING_PAYMENT',
+          reservationExpiresAt: null,
+          reservationReleasedAt: null,
         },
       },
     });
@@ -517,5 +523,84 @@ describe('PaymentsService', () => {
 
       expect(mailServiceMock.sendTicket).not.toHaveBeenCalled();
     });
+  });
+
+  it('rejects checkout for an expired reservation', async () => {
+    prismaMock.registration.findUnique.mockResolvedValue({
+      id: 'reg_expired',
+      userId: 'user_1',
+      status: 'PENDING_PAYMENT',
+      reservationExpiresAt: new Date(Date.now() - 60_000),
+      reservationReleasedAt: null,
+      payments: [],
+      event: {
+        organization: {
+          country: {
+            currency: 'GHS',
+            paymentProvider: 'PAYSTACK',
+          },
+        },
+      },
+    });
+
+    await expect(service.initialize('user_1', 'reg_expired')).rejects.toThrow(
+      'Ticket reservation has expired',
+    );
+
+    expect(httpServiceMock.axiosRef.post).not.toHaveBeenCalled();
+
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects checkout for a released reservation', async () => {
+    prismaMock.registration.findUnique.mockResolvedValue({
+      id: 'reg_released',
+      userId: 'user_1',
+      status: 'CANCELLED',
+      reservationExpiresAt: new Date(Date.now() - 60_000),
+      reservationReleasedAt: new Date(),
+      payments: [],
+      event: {
+        organization: {
+          country: {
+            currency: 'GHS',
+            paymentProvider: 'PAYSTACK',
+          },
+        },
+      },
+    });
+
+    await expect(service.initialize('user_1', 'reg_released')).rejects.toThrow(
+      'Registration is no longer available for payment',
+    );
+
+    expect(httpServiceMock.axiosRef.post).not.toHaveBeenCalled();
+
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects checkout for a confirmed registration', async () => {
+    prismaMock.registration.findUnique.mockResolvedValue({
+      id: 'reg_confirmed',
+      userId: 'user_1',
+      status: 'CONFIRMED',
+      reservationExpiresAt: null,
+      reservationReleasedAt: null,
+      payments: [],
+      event: {
+        organization: {
+          country: {
+            currency: 'GHS',
+            paymentProvider: 'PAYSTACK',
+          },
+        },
+      },
+    });
+
+    await expect(service.initialize('user_1', 'reg_confirmed')).rejects.toThrow(
+      'Registration is no longer available for payment',
+    );
+
+    expect(httpServiceMock.axiosRef.post).not.toHaveBeenCalled();
   });
 });

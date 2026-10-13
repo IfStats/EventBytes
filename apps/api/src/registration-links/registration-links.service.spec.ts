@@ -243,6 +243,7 @@ describe('RegistrationLinksService', () => {
         eventId: 'event_1',
         ticketCategoryId: 'cat_1',
         status: 'PENDING_PAYMENT',
+        reservationExpiresAt: expect.any(Date),
       },
     });
 
