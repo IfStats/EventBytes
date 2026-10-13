@@ -8,48 +8,31 @@ import {
   Param,
 } from '@nestjs/common';
 
-import { RegistrationsService } 
-from './registrations.service';
+import { RegistrationsService } from './registrations.service';
 
-import { CreateRegistrationDto }
-from './dto/create-registration.dto';
+import { CreateRegistrationDto } from './dto/create-registration.dto';
 
-import { JwtAuthGuard }
-from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('registrations')
 export class RegistrationsController {
+  constructor(private registrationsService: RegistrationsService) {}
 
-constructor(
- private registrationsService: RegistrationsService
-){}
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  create(@Req() req, @Body() dto: CreateRegistrationDto) {
+    return this.registrationsService.create(req.user.id, dto);
+  }
 
-@Post()
-@UseGuards(JwtAuthGuard)
-create(
-  @Req() req,
-  @Body() dto: CreateRegistrationDto,
-) {
-  return this.registrationsService.create(
-    req.user.id,
-    dto,
-  );
-}
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  async findMine(@Req() req) {
+    return this.registrationsService.findUserRegistrations(req.user.id);
+  }
 
-@Get()
-@UseGuards(JwtAuthGuard)
-async findMine(
-  @Req() req
-) {
-  return this.registrationsService.findUserRegistrations(req.user.id);
-}
-
-@Get(':id')
-findOne(
-  @Param('id') id:string,
-){
-
- return this.registrationsService.findOne(id);
-
-}
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  findOne(@Param('id') id: string, @Req() req: { user: { id: string } }) {
+    return this.registrationsService.findOne(id, req.user.id);
+  }
 }
