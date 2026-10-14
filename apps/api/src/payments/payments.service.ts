@@ -294,6 +294,7 @@ export class PaymentsService {
           where: {
             id: payment.registrationId,
             status: RegistrationStatus.PENDING_PAYMENT,
+            reservationReleasedAt: null,
           },
           data: {
             status: RegistrationStatus.CONFIRMED,

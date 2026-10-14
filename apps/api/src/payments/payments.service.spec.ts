@@ -476,6 +476,17 @@ describe('PaymentsService', () => {
           }),
         }),
       );
+
+      expect(txMock.registration.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'reg_1',
+          status: 'PENDING_PAYMENT',
+          reservationReleasedAt: null,
+        },
+        data: {
+          status: 'CONFIRMED',
+        },
+      });
     });
 
     it('does not reissue tickets for an already-paid payment', async () => {

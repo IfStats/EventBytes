@@ -1,113 +1,108 @@
-import "dotenv/config";
-import { randomUUID } from "crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
+import 'dotenv/config';
+import { randomUUID } from 'crypto';
+import { PrismaPg } from '@prisma/adapter-pg';
 import {
   PaymentProvider,
   PaymentStatus,
   PrismaClient,
   RegistrationStatus,
-} from "../src/generated/prisma/client";
-import { PaymentsService } from "../src/payments/payments.service";
-import type { PrismaService } from "../src/prisma/prisma.service";
-import type { TicketsService } from "../src/tickets/tickets.service";
-import type { MailService } from "../src/mail/mail.service";
-import type { ConfigService } from "@nestjs/config";
-import type { HttpService } from "@nestjs/axios";
+} from '../src/generated/prisma/client';
+import { PaymentsService } from '../src/payments/payments.service';
+import type { PrismaService } from '../src/prisma/prisma.service';
+import type { TicketsService } from '../src/tickets/tickets.service';
+import type { MailService } from '../src/mail/mail.service';
+import type { ConfigService } from '@nestjs/config';
+import type { HttpService } from '@nestjs/axios';
 
 function requireIsolatedTestDatabase(): string {
   const connectionString = process.env.EVENTBYTES_TEST_DATABASE_URL;
   if (!connectionString) {
-    throw new Error("Set EVENTBYTES_TEST_DATABASE_URL to an isolated PostgreSQL test database.");
+    throw new Error(
+      'Set EVENTBYTES_TEST_DATABASE_URL to an isolated PostgreSQL test database.',
+    );
   }
 
   const test = new URL(connectionString);
   const databaseName = decodeURIComponent(test.pathname.slice(1));
-  if (!databaseName.toLowerCase().includes("test")) {
+  if (!databaseName.toLowerCase().includes('test')) {
     throw new Error("Refusing to run: database name must include 'test'.");
   }
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Refusing to run payment integration tests in production.");
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Refusing to run payment integration tests in production.');
   }
   if (process.env.DATABASE_URL) {
     const regular = new URL(process.env.DATABASE_URL);
     if (
       test.toString() === regular.toString() ||
-      (test.hostname.replace("-pooler", "") === regular.hostname.replace("-pooler", "") &&
+      (test.hostname.replace('-pooler', '') ===
+        regular.hostname.replace('-pooler', '') &&
         test.port === regular.port &&
         test.pathname === regular.pathname)
     ) {
-      throw new Error("Test database must not be the application's regular DATABASE_URL.");
+      throw new Error(
+        "Test database must not be the application's regular DATABASE_URL.",
+      );
     }
   }
   return connectionString;
 }
 
-describe("Payment fulfillment against isolated PostgreSQL", () => {
+describe('Payment fulfillment against isolated PostgreSQL', () => {
   let db: PrismaClient;
   let service: PaymentsService;
-  let userId = "";
-  let countryCode = "";
-  let organizationId = "";
-  let eventId = "";
-  let categoryId = "";
-  let registrationId = "";
-  let reference = "";
+  let userId = '';
+  let countryCode = '';
+  let organizationId = '';
+  let eventId = '';
+  let categoryId = '';
+  let registrationId = '';
+  let reference = '';
 
   let sendTicket: jest.Mock;
 
   beforeAll(async () => {
-    
+    const connectionString = requireIsolatedTestDatabase();
 
-const connectionString = requireIsolatedTestDatabase();
+    const mode = process.env.EVENTBYTES_TEST_CONNECTION_MODE ?? 'pooled';
 
-const mode =
-  process.env.EVENTBYTES_TEST_CONNECTION_MODE ?? "pooled";
+    if (mode !== 'pooled' && mode !== 'direct') {
+      throw new Error('Invalid test connection mode');
+    }
 
-if (mode !== "pooled" && mode !== "direct") {
-  throw new Error("Invalid test connection mode");
-}
+    const url = new URL(connectionString);
 
-const url = new URL(connectionString);
+    if (mode === 'direct') {
+      url.hostname = url.hostname.replace('-pooler.', '.');
+    }
 
-if (mode === "direct") {
-  url.hostname = url.hostname.replace(
-    "-pooler.",
-    ".",
-  );
-}
+    console.log('PostgreSQL test connection:', {
+      mode,
+      host: url.hostname,
+      database: decodeURIComponent(url.pathname.slice(1)),
+    });
 
-console.log("PostgreSQL test connection:", {
-  mode,
-  host: url.hostname,
-  database: decodeURIComponent(url.pathname.slice(1)),
-});
+    db = new PrismaClient({
+      adapter: new PrismaPg({
+        connectionString: url.toString(),
+        max: 4,
+        connectionTimeoutMillis: 15_000,
+        idleTimeoutMillis: 10_000,
+      }),
+    });
 
+    await db.$connect();
 
-db = new PrismaClient({
-  adapter: new PrismaPg({
-    connectionString: url.toString(),
-    max: 4,
-    connectionTimeoutMillis: 15_000,
-    idleTimeoutMillis: 10_000,
-  }),
-});
-
-
-await db.$connect();
-
-
-
-    const suffix = randomUUID().replace(/-/g, "");
+    const suffix = randomUUID().replace(/-/g, '');
     countryCode = `TEST${suffix.slice(0, 12)}`;
 
     await db.country.create({
       data: {
         code: countryCode,
-        name: "Automated payment test",
-        currency: "GHS",
-        symbol: "GH₵",
-        locale: "en-GH",
-        timezone: "Africa/Accra",
+        name: 'Automated payment test',
+        currency: 'GHS',
+        symbol: 'GH₵',
+        locale: 'en-GH',
+        timezone: 'Africa/Accra',
         paymentProvider: PaymentProvider.PAYSTACK,
       },
     });
@@ -115,14 +110,14 @@ await db.$connect();
     const user = await db.user.create({
       data: {
         email: `eventbytes-${suffix}@example.invalid`,
-        passwordHash: "integration-test-only-not-a-real-login",
+        passwordHash: 'integration-test-only-not-a-real-login',
       },
     });
     userId = user.id;
 
     const organization = await db.organization.create({
       data: {
-        name: "Payment integration tests",
+        name: 'Payment integration tests',
         slug: `payment-test-${suffix}`,
         countryCode,
       },
@@ -132,7 +127,7 @@ await db.$connect();
     const event = await db.event.create({
       data: {
         organizationId,
-        name: "Integration test event",
+        name: 'Integration test event',
         slug: `payment-test-event-${suffix}`,
         startDate: new Date(Date.now() + 86_400_000),
         endDate: new Date(Date.now() + 172_800_000),
@@ -143,7 +138,7 @@ await db.$connect();
     const category = await db.ticketCategory.create({
       data: {
         eventId,
-        name: "General",
+        name: 'General',
         price: 50,
         quantity: 100,
       },
@@ -167,7 +162,7 @@ await db.$connect();
       data: {
         registrationId,
         amount: 50,
-        currency: "GHS",
+        currency: 'GHS',
         provider: PaymentProvider.PAYSTACK,
         reference,
         status: PaymentStatus.PENDING,
@@ -175,21 +170,23 @@ await db.$connect();
     });
 
     sendTicket = jest.fn().mockResolvedValue({
-      data: { id: "test-email-not-sent" },
+      data: { id: 'test-email-not-sent' },
       error: null,
     });
 
     const http = {
       axiosRef: {
         get: jest.fn(async (url: string) => {
-          const requestedReference = decodeURIComponent(url.split("/").pop() || "");
+          const requestedReference = decodeURIComponent(
+            url.split('/').pop() || '',
+          );
           return {
             data: {
               status: true,
               data: {
-                status: "success",
+                status: 'success',
                 reference: requestedReference,
-                currency: "GHS",
+                currency: 'GHS',
                 amount: 5000,
               },
             },
@@ -200,7 +197,9 @@ await db.$connect();
 
     const config = {
       get: (key: string) =>
-        key === "PAYSTACK_SECRET_KEY" ? "test-secret-no-real-provider-requests" : undefined,
+        key === 'PAYSTACK_SECRET_KEY'
+          ? 'test-secret-no-real-provider-requests'
+          : undefined,
     };
 
     service = new PaymentsService(
@@ -217,51 +216,54 @@ await db.$connect();
     await db.ticket.deleteMany({ where: { registrationId } });
     await db.payment.deleteMany({ where: { registrationId } });
     await db.registration.deleteMany({ where: { id: registrationId } });
-    registrationId = "";
+    registrationId = '';
   });
 
   afterAll(async () => {
     if (!db) return;
     try {
-      if (categoryId) await db.ticketCategory.deleteMany({ where: { id: categoryId } });
+      if (categoryId)
+        await db.ticketCategory.deleteMany({ where: { id: categoryId } });
       if (eventId) await db.event.deleteMany({ where: { id: eventId } });
-      if (organizationId) await db.organization.deleteMany({ where: { id: organizationId } });
+      if (organizationId)
+        await db.organization.deleteMany({ where: { id: organizationId } });
       if (userId) await db.user.deleteMany({ where: { id: userId } });
-      if (countryCode) await db.country.deleteMany({ where: { code: countryCode } });
+      if (countryCode)
+        await db.country.deleteMany({ where: { code: countryCode } });
     } finally {
       await db.$disconnect();
     }
   });
 
-  it("fulfills four simultaneous callbacks exactly once", async () => {
-    
-const outcomes = await Promise.allSettled(
-  Array.from({ length: 4 }, () =>
-    service.verify(reference, userId),
-  ),
-);
+  it('fulfills four simultaneous callbacks exactly once', async () => {
+    const outcomes = await Promise.allSettled(
+      Array.from({ length: 4 }, () => service.verify(reference, userId)),
+    );
 
-const failures = outcomes.flatMap((outcome) =>
-  outcome.status === "rejected"
-    ? [
-        outcome.reason instanceof Error
-          ? outcome.reason.message
-          : String(outcome.reason),
-      ]
-    : [],
-);
+    const failures = outcomes.flatMap((outcome) =>
+      outcome.status === 'rejected'
+        ? [
+            outcome.reason instanceof Error
+              ? outcome.reason.message
+              : String(outcome.reason),
+          ]
+        : [],
+    );
 
-expect(failures).toEqual([]);
+    expect(failures).toEqual([]);
 
-const results = outcomes.flatMap((outcome) =>
-  outcome.status === "fulfilled"
-    ? [outcome.value]
-    : [],
-);
+    const results = outcomes.flatMap((outcome) =>
+      outcome.status === 'fulfilled' ? [outcome.value] : [],
+    );
 
-
-    expect(results.filter((result) => result.message === "Payment verified")).toHaveLength(1);
-    expect(results.filter((result) => result.message === "Payment already processed")).toHaveLength(3);
+    expect(
+      results.filter((result) => result.message === 'Payment verified'),
+    ).toHaveLength(1);
+    expect(
+      results.filter(
+        (result) => result.message === 'Payment already processed',
+      ),
+    ).toHaveLength(3);
 
     const [payment, registration, tickets] = await Promise.all([
       db.payment.findUniqueOrThrow({ where: { reference } }),
@@ -275,7 +277,7 @@ const results = outcomes.flatMap((outcome) =>
     expect(sendTicket).toHaveBeenCalledTimes(1);
   });
 
-  it("rolls back payment and registration updates if ticket creation fails", async () => {
+  it('rolls back payment and registration updates if ticket creation fails', async () => {
     await db.ticket.create({
       data: {
         registrationId,
@@ -298,13 +300,13 @@ const results = outcomes.flatMap((outcome) =>
     expect(sendTicket).not.toHaveBeenCalled();
   });
 
-  it("rolls back the second competing successful charge", async () => {
+  it('rolls back the second competing successful charge', async () => {
     const otherReference = `EVT-${randomUUID()}`;
     await db.payment.create({
       data: {
         registrationId,
         amount: 50,
-        currency: "GHS",
+        currency: 'GHS',
         provider: PaymentProvider.PAYSTACK,
         reference: otherReference,
         status: PaymentStatus.PENDING,
@@ -316,8 +318,8 @@ const results = outcomes.flatMap((outcome) =>
       service.verify(otherReference, userId),
     ]);
 
-    expect(outcomes.filter((x) => x.status === "fulfilled")).toHaveLength(1);
-    expect(outcomes.filter((x) => x.status === "rejected")).toHaveLength(1);
+    expect(outcomes.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter((x) => x.status === 'rejected')).toHaveLength(1);
 
     const [payments, tickets, registration] = await Promise.all([
       db.payment.findMany({ where: { registrationId } }),
@@ -325,8 +327,84 @@ const results = outcomes.flatMap((outcome) =>
       db.registration.findUniqueOrThrow({ where: { id: registrationId } }),
     ]);
 
-    expect(payments.filter((p) => p.status === PaymentStatus.PAID)).toHaveLength(1);
-    expect(payments.filter((p) => p.status === PaymentStatus.PENDING)).toHaveLength(1);
+    expect(
+      payments.filter((p) => p.status === PaymentStatus.PAID),
+    ).toHaveLength(1);
+    expect(
+      payments.filter((p) => p.status === PaymentStatus.PENDING),
+    ).toHaveLength(1);
+    expect(registration.status).toBe(RegistrationStatus.CONFIRMED);
+    expect(tickets).toHaveLength(1);
+    expect(sendTicket).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects fulfillment of a cancelled and released reservation', async () => {
+    await db.registration.update({
+      where: { id: registrationId },
+      data: {
+        status: RegistrationStatus.CANCELLED,
+        reservationExpiresAt: new Date(Date.now() - 60_000),
+        reservationReleasedAt: new Date(),
+      },
+    });
+
+    await expect(service.verify(reference, userId)).rejects.toThrow(
+      'Registration already fulfilled; payment requires reconciliation',
+    );
+
+    const [payment, registration, tickets] = await Promise.all([
+      db.payment.findUniqueOrThrow({ where: { reference } }),
+      db.registration.findUniqueOrThrow({ where: { id: registrationId } }),
+      db.ticket.findMany({ where: { registrationId } }),
+    ]);
+
+    expect(payment.status).toBe(PaymentStatus.PENDING);
+    expect(registration.status).toBe(RegistrationStatus.CANCELLED);
+    expect(tickets).toHaveLength(0);
+    expect(sendTicket).not.toHaveBeenCalled();
+  });
+
+  it('rejects a released reservation even if its status is still pending', async () => {
+    // Defensive test: the release marker alone must block fulfillment.
+    await db.registration.update({
+      where: { id: registrationId },
+      data: {
+        status: RegistrationStatus.PENDING_PAYMENT,
+        reservationReleasedAt: new Date(),
+      },
+    });
+
+    await expect(service.verify(reference, userId)).rejects.toThrow(
+      'Registration already fulfilled; payment requires reconciliation',
+    );
+
+    const tickets = await db.ticket.findMany({
+      where: { registrationId },
+    });
+
+    expect(tickets).toHaveLength(0);
+    expect(sendTicket).not.toHaveBeenCalled();
+  });
+
+  it('fulfills a verified charge when expired inventory is still held', async () => {
+    await db.registration.update({
+      where: { id: registrationId },
+      data: {
+        reservationExpiresAt: new Date(Date.now() - 60_000),
+        reservationReleasedAt: null,
+      },
+    });
+
+    const result = await service.verify(reference, userId);
+
+    const [payment, registration, tickets] = await Promise.all([
+      db.payment.findUniqueOrThrow({ where: { reference } }),
+      db.registration.findUniqueOrThrow({ where: { id: registrationId } }),
+      db.ticket.findMany({ where: { registrationId } }),
+    ]);
+
+    expect(result.message).toBe('Payment verified');
+    expect(payment.status).toBe(PaymentStatus.PAID);
     expect(registration.status).toBe(RegistrationStatus.CONFIRMED);
     expect(tickets).toHaveLength(1);
     expect(sendTicket).toHaveBeenCalledTimes(1);
